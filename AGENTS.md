@@ -2,8 +2,10 @@
 
 - Read `README.md` before starting work to understand the app, setup, and prototype limitations.
 - Update `README.md` when changes affect setup, behavior, usage, or documented limitations.
+- Keep `README.md` minimal and concise.
 - Do not perform Git actions like Commit, Push, Pull etc. Assume human actions
 - Generate unit tests in `src/tests` after major feature implementations
+- Data insight and evaluation scripts go in `analysis/`; main application and prediction logic go in `src/`
 
 # Code style guideline
 
