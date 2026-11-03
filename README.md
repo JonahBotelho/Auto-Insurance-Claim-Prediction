@@ -1,6 +1,26 @@
 # COMP4983-Final-Project
 
-## Correlation analysis
+This project aims to predict the 
+
+## Analysis
+
+The analysis directory is made for short scripts to provide insights on data, not for main prediction logic.
+
+### Basic linear regression
+
+Fit a linear regression using NumPy and scikit-learn to predict `ClaimAmount`
+from the 18 feature columns in `trainingset.csv` (`rowIndex` is excluded):
+
+```powershell
+python -m pip install -r analysis/requirements.txt
+python analysis/linear_regression.py
+```
+
+The script prints mean absolute error (MAE) on the same training rows used to fit
+the model. This is training error, not a measure of performance on unseen data.
+
+### Correlation analysis
+
 Generate training-data correlation plots with Python 3.10 or newer. Run from the repository folder:
 
 ```powershell
