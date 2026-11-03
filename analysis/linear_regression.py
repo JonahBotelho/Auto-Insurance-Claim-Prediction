@@ -12,7 +12,7 @@ from sklearn.metrics import mean_absolute_error
 
 
 def main():
-    source = Path(__file__).resolve().parents[1] / "trainingset.csv"
+    source = Path(__file__).resolve().parents[1] / "data" / "trainingset.csv"
     data = np.loadtxt(source, delimiter=",", skiprows=1)
     # Exclude rowIndex and keep ClaimAmount as the target, not a predictor.
     features, claim_amounts = data[:, 1:-1], data[:, -1]

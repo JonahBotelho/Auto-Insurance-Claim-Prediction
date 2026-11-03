@@ -1,6 +1,9 @@
 # COMP4983-Final-Project
 
-This project aims to predict the 
+This project aims to predict insurance claim for insured customers, given unlabled features related to the customer and vehicle. 
+
+Input datasets and the submission template are in `data/`:
+`trainingset.csv`, `testset.csv`, and `submission.csv`.
 
 ## Analysis
 
@@ -9,7 +12,7 @@ The analysis directory is made for short scripts to provide insights on data, no
 ### Basic linear regression
 
 Fit a linear regression using NumPy and scikit-learn to predict `ClaimAmount`
-from the 18 feature columns in `trainingset.csv` (`rowIndex` is excluded):
+from the 18 feature columns in `data/trainingset.csv` (`rowIndex` is excluded):
 
 ```powershell
 python -m pip install -r analysis/requirements.txt

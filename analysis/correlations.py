@@ -151,7 +151,7 @@ variable.onchange=filter;strength.onchange=filter;filter();</script></html>'''
 def main():
     repository = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input", type=Path, default=repository / "trainingset.csv")
+    parser.add_argument("--input", type=Path, default=repository / "data" / "trainingset.csv")
     parser.add_argument("--output", type=Path, default=repository / "analysis" / "output")
     arguments = parser.parse_args()
     data = load_data(arguments.input)
