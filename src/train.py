@@ -15,7 +15,7 @@ from src.model_io import save_model
 from src.two_stage_model import TwoStageClaimModel
 
 
-THRESHOLD_CANDIDATES = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5]
+THRESHOLD_CANDIDATES = [0.0, 0.05, 0.1, 0.15, 0.2, 0.25]
 
 
 def parse_args(argv=None) -> argparse.Namespace:
@@ -48,6 +48,7 @@ def _print_holdout_results(model, X_val, y_val):
 
     has_claim_val = (y_val > 0).astype(int)
     claim_probabilities = model.classifier_.predict_proba(X_val)[:, 1]
+    print(f"Max predicted claim probability (holdout): {claim_probabilities.max():.4f}")
     print(f"Holdout classifier AUC: {roc_auc_score(has_claim_val, claim_probabilities):.4f}")
     print(classification_report(has_claim_val, model.classifier_.predict(X_val)))
 
