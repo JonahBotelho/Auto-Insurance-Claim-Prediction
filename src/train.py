@@ -15,7 +15,7 @@ from src.model_io import save_model
 from src.two_stage_model import TwoStageClaimModel
 
 
-THRESHOLD_CANDIDATES = [0.0, 0.05, 0.1, 0.15, 0.2, 0.25]
+THRESHOLD_CANDIDATES = [0.0, 0.05, 0.1, 0.15, 0.2]
 
 
 def parse_args(argv=None) -> argparse.Namespace:
@@ -34,11 +34,11 @@ def _select_best_threshold(X_train, y_train, n_splits):
         candidate_model = TwoStageClaimModel(claim_probability_threshold=threshold)
         fold_scores = cross_validate_mae(candidate_model, X_train, y_train, n_splits=n_splits)
         mean_mae = fold_scores.mean()
-        print(f"Threshold {threshold:.1f}: mean CV MAE = {mean_mae:.2f}")
+        print(f"Threshold {threshold:.2f}: mean CV MAE = {mean_mae:.2f}")
         if best_mean_mae is None or mean_mae < best_mean_mae:
             best_mean_mae = mean_mae
             best_threshold = threshold
-    print(f"Selected threshold {best_threshold:.1f} (mean CV MAE {best_mean_mae:.2f})")
+    print(f"Selected threshold {best_threshold:.2f} (mean CV MAE {best_mean_mae:.2f})")
     return best_threshold
 
 

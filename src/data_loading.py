@@ -7,11 +7,23 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.feature_schema import CATEGORICAL_FEATURES, HAS_CLAIM_COLUMN, TARGET_COLUMN
+from src.feature_schema import (
+    CATEGORICAL_FEATURES,
+    FEATURE1_CUBED_COLUMN,
+    FEATURE1_SQUARED_COLUMN,
+    HAS_CLAIM_COLUMN,
+    TARGET_COLUMN,
+)
 
 DATA_DIRECTORY = Path(__file__).resolve().parents[1] / "data"
 DEFAULT_TRAINING_PATH = DATA_DIRECTORY / "trainingset.csv"
 DEFAULT_TEST_PATH = DATA_DIRECTORY / "testset.csv"
+
+
+def _add_feature1_polynomial_terms(data: pd.DataFrame) -> pd.DataFrame:
+    data[FEATURE1_SQUARED_COLUMN] = data["feature1"] ** 2
+    data[FEATURE1_CUBED_COLUMN] = data["feature1"] ** 3
+    return data
 
 
 def _read_csv_with_typed_categories(path: Path) -> pd.DataFrame:
@@ -20,7 +32,7 @@ def _read_csv_with_typed_categories(path: Path) -> pd.DataFrame:
     # numbers downstream (e.g. accidentally scaled instead of one-hot encoded).
     for column in CATEGORICAL_FEATURES:
         data[column] = data[column].astype("category")
-    return data
+    return _add_feature1_polynomial_terms(data)
 
 
 def load_training_data(path: Path = DEFAULT_TRAINING_PATH) -> pd.DataFrame:

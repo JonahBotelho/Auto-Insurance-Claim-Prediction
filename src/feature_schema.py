@@ -20,7 +20,13 @@ CATEGORICAL_FEATURES = [
     "feature11", "feature13", "feature14", "feature15", "feature16", "feature18",
 ]
 
-NUMERIC_FEATURES = CONTINUOUS_FEATURES + DISCRETE_COUNT_FEATURES
+# feature1 vs. claim rate is curved (EDA: 0.33% to 9% across deciles), not a
+# straight line, so these let a linear log-odds model fit that curve.
+FEATURE1_SQUARED_COLUMN = "feature1_squared"
+FEATURE1_CUBED_COLUMN = "feature1_cubed"
+ENGINEERED_FEATURES = [FEATURE1_SQUARED_COLUMN, FEATURE1_CUBED_COLUMN]
+
+NUMERIC_FEATURES = CONTINUOUS_FEATURES + DISCRETE_COUNT_FEATURES + ENGINEERED_FEATURES
 ALL_FEATURE_COLUMNS = NUMERIC_FEATURES + CATEGORICAL_FEATURES
 
 # Categories with fewer rows than this get bucketed into "infrequent" by the encoder.

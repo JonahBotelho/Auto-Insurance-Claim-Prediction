@@ -7,25 +7,18 @@ object that handles raw features in and predictions out.
 
 import numpy as np
 from sklearn.base import BaseEstimator, RegressorMixin
-from sklearn.linear_model import Ridge
+from sklearn.linear_model import LogisticRegression, Ridge
 from sklearn.compose import TransformedTargetRegressor
 from sklearn.pipeline import Pipeline
-from sklearn.tree import DecisionTreeClassifier
 
 from src.feature_schema import RANDOM_SEED
 from src.preprocessing import build_preprocessing_pipeline
 
 
 def build_claim_classifier_pipeline() -> Pipeline:
-    # max_depth/min_samples_leaf keep the tree from memorizing individual
-    # training rows, while still letting it isolate rare high-risk feature
-    # combinations that a linear model spreads too thinly to separate out.
-    classifier_model = DecisionTreeClassifier(
-        max_depth=5, min_samples_leaf=50, random_state=RANDOM_SEED
-    )
     return Pipeline([
         ("preprocessing", build_preprocessing_pipeline()),
-        ("model", classifier_model),
+        ("model", LogisticRegression(max_iter=1000, random_state=RANDOM_SEED)),
     ])
 
 
