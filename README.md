@@ -30,7 +30,8 @@ change the fold count.
 Prediction loads the saved model and writes nonnegative, probability-weighted
 claim amounts, with zero below the selected threshold. The default output
 **overwrites `data/submission.csv`**, preserving test-set row order and the
-`rowIndex,ClaimAmount` columns. Override paths as needed:
+`rowIndex,ClaimAmount` columns. It prints the non-zero claim count, total rows,
+and non-zero percentage to four decimal places. Override paths as needed:
 
 ```powershell
 python -m src.predict --model-path models/two_stage_claim_model.joblib --input data/testset.csv --output data/predictions.csv

@@ -34,6 +34,10 @@ def main(argv=None):
     submission = generate_submission(model, test_data)
     submission.to_csv(args.output, index=False)
     print(f"Wrote {len(submission)} predictions to {args.output}")
+    total_claims = len(submission)
+    nonzero_claims = int((submission[TARGET_COLUMN] > 0).sum())
+    nonzero_percentage = 100 * nonzero_claims / total_claims if total_claims else 0.0
+    print(f"Non-zero claims: {nonzero_claims}/{total_claims} ({nonzero_percentage:.4f}%)")
 
 
 if __name__ == "__main__":
