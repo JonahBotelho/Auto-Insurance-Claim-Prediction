@@ -1,5 +1,5 @@
 """
-Shared constants describing the dataset's column names and feature groupings.
+Shared dataset constants and training configuration defaults.
 Every other module imports from here instead of re-declaring these lists,
 so feature-type decisions (made during EDA) live in exactly one place.
 """
@@ -34,3 +34,17 @@ RARE_CATEGORY_MIN_FREQUENCY = 30
 
 # Fixed seed so splits/CV folds are reproducible across runs and teammates.
 RANDOM_SEED = 42
+
+# Training configuration uses integer hundredths to keep threshold grids exact.
+THRESHOLD_SCALE = 100
+MIN_THRESHOLD_HUNDREDTHS = 0
+MAX_THRESHOLD_HUNDREDTHS = 100
+DEFAULT_MIN_THRESHOLD_HUNDREDTHS = 10
+DEFAULT_MAX_THRESHOLD_HUNDREDTHS = 25
+MIN_EVALUATION_PERCENT = 1
+MAX_EVALUATION_PERCENT = 99
+DEFAULT_EVALUATION_PERCENT = 30
+MIN_CV_FOLDS = 2
+DEFAULT_CV_FOLDS = 5
+DEFAULT_MODEL_ID = "two_stage"
+MODEL_LABELS = {DEFAULT_MODEL_ID: "Two-stage claim model - logistic regression + Ridge"}

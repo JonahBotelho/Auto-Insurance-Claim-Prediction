@@ -4,7 +4,7 @@
 - Update `README.md` when changes affect setup, behavior, usage, or documented limitations.
 - Keep `README.md` minimal and concise.
 - Do not perform Git actions like Commit, Push, Pull etc. Assume human actions
-- Generate unit tests in `src/tests` after major feature implementations
+- Add or modify tests only when explicitly requested by the user; place unit tests in `src/tests`.
 - Data insight and evaluation scripts go in `analysis/`; main application and prediction logic go in `src/`
 - Use `src/feature_schema.py` for shared constants; import them from there rather than duplicating definitions.
 
