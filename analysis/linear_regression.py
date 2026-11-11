@@ -1,6 +1,6 @@
 """
 Fit a basic claim amount regression and report MAE on the training data.
-Note that this is meant as baseline regression calcualtion with no preprocessing or modification.
+Note that this is meant as baseline regression calculation with no preprocessing or modification.
 Do not expand on this file's logic.
 """
 
