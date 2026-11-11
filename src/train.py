@@ -31,7 +31,8 @@ def parse_args(argv=None) -> argparse.Namespace:
 
 
 def _build_model(settings, threshold):
-    return build_two_stage_model(settings.model_id, threshold / THRESHOLD_SCALE)
+    return build_two_stage_model(settings.model_id, threshold / THRESHOLD_SCALE,
+                                 min_samples_leaf=settings.min_samples_leaf)
 
 
 def _select_best_threshold(X_train, y_train, settings):
@@ -100,6 +101,8 @@ def _train_and_save(settings, X, y, partitions):
     model = _build_model(settings, best_threshold)
 
     model.fit(X_train, y_train)
+    training_predictions = model.predict(X_train)
+    print(f"Training MAE: {mean_absolute_error(y_train, training_predictions):.2f}")
     _print_holdout_results(model, X_val, y_val)
 
     # Evaluation is complete; use all labeled rows for the saved model.

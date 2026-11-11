@@ -31,8 +31,10 @@ def _build_claim_classifier(model_id):
     raise ValueError(f"Unknown claim model: {model_id}")
 
 
-def build_claim_classifier_pipeline(model_id=DEFAULT_MODEL_ID) -> Pipeline:
+def build_claim_classifier_pipeline(model_id=DEFAULT_MODEL_ID, min_samples_leaf=None) -> Pipeline:
     classifier = _build_claim_classifier(model_id)
+    if min_samples_leaf is not None:
+        classifier.set_params(min_samples_leaf=min_samples_leaf)
     if model_id == HIST_GRADIENT_BOOSTING_MODEL_ID:
         # Preserve the loader's pandas category dtypes so native categorical
         # splits can be learned independently inside each training/CV fit.
@@ -58,10 +60,10 @@ def build_claim_severity_pipeline() -> Pipeline:
     ])
 
 
-def build_two_stage_model(model_id, claim_probability_threshold):
+def build_two_stage_model(model_id, claim_probability_threshold, min_samples_leaf=None):
     """Build fresh estimators for each training run and threshold candidate."""
     return TwoStageClaimModel(
-        classifier=build_claim_classifier_pipeline(model_id),
+        classifier=build_claim_classifier_pipeline(model_id, min_samples_leaf=min_samples_leaf),
         claim_probability_threshold=claim_probability_threshold,
     )
 

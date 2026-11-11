@@ -16,6 +16,7 @@ from src.feature_schema import (
     MIN_THRESHOLD_HUNDREDTHS,
     MODEL_LABELS,
     THRESHOLD_SCALE,
+    TREE_CLASSIFIER_PARAMS,
 )
 
 
@@ -35,6 +36,7 @@ class TrainingSettings:
     evaluation_percent: int = DEFAULT_EVALUATION_PERCENT
     model_id: str = DEFAULT_MODEL_ID
     n_splits: int = DEFAULT_CV_FOLDS
+    min_samples_leaf: int | None = None
 
     def __post_init__(self):
         for value in (self.min_threshold, self.max_threshold):
@@ -47,6 +49,10 @@ class TrainingSettings:
         _validate_integer(self.n_splits, MIN_CV_FOLDS, None, "CV folds")
         if self.model_id not in MODEL_LABELS:
             raise ValueError("Choose an available model.")
+        if self.min_samples_leaf is not None:
+            _validate_integer(self.min_samples_leaf, 1, None, "Minimum samples per leaf")
+            if self.model_id not in TREE_CLASSIFIER_PARAMS:
+                raise ValueError("Minimum samples per leaf requires a tree classifier.")
 
     @property
     def evaluation_fraction(self):
@@ -90,6 +96,14 @@ def _parse_evaluation_percent(text):
                              "Evaluation percentage")
 
 
+def _parse_leaf_size(text):
+    try:
+        value = int(text)
+    except ValueError as error:
+        raise ValueError("Minimum samples per leaf must be a whole number at least 1.") from error
+    return _validate_integer(value, 1, None, "Minimum samples per leaf")
+
+
 def _prompt(label, default, parse):
     while True:
         response = input(f"{label} [{default}]: ").strip()
@@ -128,13 +142,25 @@ def prompt_settings(defaults):
                          _parse_evaluation_percent)
     print(f"Split: {100 - evaluation}% training / {evaluation}% evaluation")
     model_id = _prompt_model(defaults.model_id)
+    leaf_size = None
+    if model_id in TREE_CLASSIFIER_PARAMS:
+        leaf_default = TREE_CLASSIFIER_PARAMS[model_id]["min_samples_leaf"]
+        if model_id == defaults.model_id and defaults.min_samples_leaf is not None:
+            leaf_default = defaults.min_samples_leaf
+        leaf_size = _prompt("Minimum samples per leaf", leaf_default, _parse_leaf_size)
     folds = _prompt("CV folds", defaults.n_splits, parse_fold_count)
-    return TrainingSettings(minimum, maximum, evaluation, model_id, folds)
+    return TrainingSettings(minimum, maximum, evaluation, model_id, folds,
+                            min_samples_leaf=leaf_size)
 
 
 def confirm_training(settings, output_path):
     print("\nTraining configuration:")
     print(f"Model: {MODEL_LABELS[settings.model_id]}")
+    if settings.model_id in TREE_CLASSIFIER_PARAMS:
+        leaf_size = settings.min_samples_leaf
+        if leaf_size is None:
+            leaf_size = TREE_CLASSIFIER_PARAMS[settings.model_id]["min_samples_leaf"]
+        print(f"Minimum samples per leaf: {leaf_size}")
     print(f"Thresholds: {settings.min_threshold / THRESHOLD_SCALE:.2f}-"
           f"{settings.max_threshold / THRESHOLD_SCALE:.2f} in steps of 0.01 "
           f"({len(settings.threshold_candidates())} candidates)")

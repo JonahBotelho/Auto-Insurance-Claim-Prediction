@@ -26,7 +26,8 @@ derives squared and cubed terms from `feature1`.
 Training reserves a stratified 30% holdout and selects a claim-probability
 threshold from 0.10–0.25 inclusive in steps of 0.01 (16 candidates) using five-fold
 cross-validation on the remaining 70%. The holdout does not influence threshold
-selection. Training reports CV MAE, holdout MAE, classifier AUC, and a classification
+selection. Training reports CV MAE, training MAE on the fitted training partition,
+holdout MAE, classifier AUC, and a classification
 report with true/false positive and negative counts, treating actual and predicted
 `ClaimAmount > 0` as claims. It then refits on all training rows and saves
 `models/two_stage_claim_model.joblib`, replacing the file if it exists.
@@ -39,10 +40,13 @@ Run `python -m src.train --config` for terminal prompts to adjust:
 - Evaluation percentage: a whole number from 1–99; the remainder is for training.
 - Model: logistic regression, Random Forest, Extra Trees, or Histogram Gradient
   Boosting, each paired with Ridge for claim severity.
+- Minimum samples per leaf for Random Forest, Extra Trees, and Histogram Gradient
+  Boosting: a whole number of at least 1. Enter accepts the selected model's preset.
 - CV folds: a whole number of at least 2.
 
 Edit model presets in the Model tuning section of `src/feature_schema.py`, then
-retrain to apply changes. Random Forest and Extra Trees default to 5 samples per leaf.
+retrain to apply changes. Configuration can override leaf size for one training run,
+including its CV fits, holdout fit, and full-data refit.
 Tree ensembles can take longer to train because each threshold and fold requires a refit.
 
 Enter accepts the displayed defaults, which match ordinary training;
