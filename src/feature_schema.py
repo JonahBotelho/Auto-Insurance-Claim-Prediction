@@ -29,22 +29,83 @@ ENGINEERED_FEATURES = [FEATURE1_SQUARED_COLUMN, FEATURE1_CUBED_COLUMN]
 NUMERIC_FEATURES = CONTINUOUS_FEATURES + DISCRETE_COUNT_FEATURES + ENGINEERED_FEATURES
 ALL_FEATURE_COLUMNS = NUMERIC_FEATURES + CATEGORICAL_FEATURES
 
+# Model tuning
+# Edit these presets before training; existing saved models retain their fitted settings.
+
 # Categories with fewer rows than this get bucketed into "infrequent" by the encoder.
 RARE_CATEGORY_MIN_FREQUENCY = 30
 
 # Fixed seed so splits/CV folds are reproducible across runs and teammates.
 RANDOM_SEED = 42
 
+LOGISTIC_REGRESSION_PARAMS = {
+    "C": 1.0,
+    "max_iter": 1000,
+    "class_weight": None,
+    "random_state": RANDOM_SEED,
+}
+
+RANDOM_FOREST_PARAMS = {
+    "n_estimators": 200,
+    "min_samples_leaf": 5,
+    "min_samples_split": 2,
+    "max_features": "sqrt",
+    "max_depth": None,
+    "criterion": "gini",
+    "class_weight": None,
+    "bootstrap": True,
+    "max_samples": None,
+    "n_jobs": -1,
+    "random_state": RANDOM_SEED,
+}
+
+EXTRA_TREES_PARAMS = {
+    "n_estimators": 200,
+    "min_samples_leaf": 5,
+    "min_samples_split": 2,
+    "max_features": "sqrt",
+    "max_depth": None,
+    "criterion": "gini",
+    "class_weight": None,
+    "bootstrap": False,
+    "max_samples": None,
+    "n_jobs": -1,
+    "random_state": RANDOM_SEED,
+}
+
+HIST_GRADIENT_BOOSTING_PARAMS = {
+    "max_iter": 100,
+    "learning_rate": 0.1,
+    "max_leaf_nodes": 15,
+    "max_depth": None,
+    "min_samples_leaf": 20,
+    "l2_regularization": 1.0,
+    "early_stopping": "auto",
+    "class_weight": None,
+    "categorical_features": "from_dtype",
+    "random_state": RANDOM_SEED,
+}
+
+RIDGE_PARAMS = {"alpha": 1.0}
+
 # Training configuration uses integer hundredths to keep threshold grids exact.
 THRESHOLD_SCALE = 100
 MIN_THRESHOLD_HUNDREDTHS = 0
 MAX_THRESHOLD_HUNDREDTHS = 100
 DEFAULT_MIN_THRESHOLD_HUNDREDTHS = 10
-DEFAULT_MAX_THRESHOLD_HUNDREDTHS = 25
+DEFAULT_MAX_THRESHOLD_HUNDREDTHS = 20
 MIN_EVALUATION_PERCENT = 1
 MAX_EVALUATION_PERCENT = 99
-DEFAULT_EVALUATION_PERCENT = 30
+DEFAULT_EVALUATION_PERCENT = 38
 MIN_CV_FOLDS = 2
 DEFAULT_CV_FOLDS = 5
 DEFAULT_MODEL_ID = "two_stage"
-MODEL_LABELS = {DEFAULT_MODEL_ID: "Two-stage claim model - logistic regression + Ridge"}
+RANDOM_FOREST_MODEL_ID = "two_stage_random_forest"
+EXTRA_TREES_MODEL_ID = "two_stage_extra_trees"
+HIST_GRADIENT_BOOSTING_MODEL_ID = "two_stage_hist_gradient_boosting"
+MODEL_LABELS = {
+    DEFAULT_MODEL_ID: "Two-stage claim model - logistic regression + Ridge",
+    RANDOM_FOREST_MODEL_ID: "Two-stage claim model - Random Forest + Ridge",
+    EXTRA_TREES_MODEL_ID: "Two-stage claim model - Extra Trees + Ridge",
+    HIST_GRADIENT_BOOSTING_MODEL_ID: "Two-stage claim model - Histogram Gradient Boosting + Ridge",
+}

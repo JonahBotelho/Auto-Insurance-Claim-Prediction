@@ -7,6 +7,7 @@
 - Add or modify tests only when explicitly requested by the user; place unit tests in `src/tests`.
 - Data insight and evaluation scripts go in `analysis/`; main application and prediction logic go in `src/`
 - Use `src/feature_schema.py` for shared constants; import them from there rather than duplicating definitions.
+- Make small, focused changes, avoiding rewriting too much existing code when possible.
 
 # Code style guideline
 

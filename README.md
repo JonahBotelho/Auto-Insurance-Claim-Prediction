@@ -16,16 +16,19 @@ python -m src.train
 python -m src.predict
 ```
 
-The two-stage model combines logistic regression for claim probability with
-Ridge regression on `log1p` positive claim amounts. Preprocessing scales numeric
-features and one-hot encodes categorical features, grouping rare categories.
-The workflow also derives squared and cubed terms from `feature1`.
+The two-stage model combines a claim-probability classifier (logistic regression
+by default) with Ridge regression on `log1p` positive claim amounts. Preprocessing
+scales numeric features and one-hot encodes categorical features, grouping rare
+categories. Histogram Gradient Boosting instead uses native categorical features
+for its classifier; Ridge retains the shared preprocessing. The workflow also
+derives squared and cubed terms from `feature1`.
 
 Training reserves a stratified 30% holdout and selects a claim-probability
 threshold from 0.10–0.25 inclusive in steps of 0.01 (16 candidates) using five-fold
 cross-validation on the remaining 70%. The holdout does not influence threshold
 selection. Training reports CV MAE, holdout MAE, classifier AUC, and a classification
-report, then refits on all training rows and saves
+report with true/false positive and negative counts, treating actual and predicted
+`ClaimAmount > 0` as claims. It then refits on all training rows and saves
 `models/two_stage_claim_model.joblib`, replacing the file if it exists.
 Use `python -m src.train --n-splits 3` to change the fold count.
 
@@ -34,16 +37,21 @@ Run `python -m src.train --config` for terminal prompts to adjust:
 - Minimum and maximum thresholds: 0.00–1.00 in 0.01 steps, including both bounds.
   Minimum must not exceed maximum; equal bounds evaluate one threshold.
 - Evaluation percentage: a whole number from 1–99; the remainder is for training.
-- Model: currently only the two-stage model described above.
+- Model: logistic regression, Random Forest, Extra Trees, or Histogram Gradient
+  Boosting, each paired with Ridge for claim severity.
 - CV folds: a whole number of at least 2.
+
+Edit model presets in the Model tuning section of `src/feature_schema.py`, then
+retrain to apply changes. Random Forest and Extra Trees default to 5 samples per leaf.
+Tree ensembles can take longer to train because each threshold and fold requires a refit.
 
 Enter accepts the displayed defaults, which match ordinary training;
 `--n-splits` sets the initial fold count and can be overridden at the prompt.
 Both partitions must contain zero and positive claims, and the training partition
 must have at least one example of each class per CV fold. Infeasible settings stop
-the run before fitting. After validation, review the summary and enter `y` or
-`yes` to train; any other response cancels. Ctrl+C or closed input during
-configuration also cancels before fitting. Settings apply only to that run.
+the run before fitting. After validation, review the summary and press Enter to
+start training. Ctrl+C or closed input during configuration cancels before fitting.
+Settings apply only to that run.
 
 Prediction loads the saved model and writes nonnegative, probability-weighted
 claim amounts, with zero below the selected threshold. The default output
