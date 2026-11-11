@@ -76,8 +76,37 @@ start training or Ctrl+C to cancel.
 
 ### 1_2_7
 
+Model: LightGBM (with group claim-history features)
+- Minimum threshold: 0.55
+- Maximum threshold: 0.55
+- Evaluation/training split: 20% / 80%
+- Minimum samples per leaf: 100
+- Training MAE: 102.02
+- Holdout MAE: 103.65
 ### 1_2_8
 
+Model: LightGBM (with group claim-history features)
+- Minimum threshold: 0.50
+- Maximum threshold: 0.50
+- Evaluation/training split: 20% / 80%
+- Minimum samples per leaf: 100
+- Training MAE: 102.35
+- Holdout MAE: 103.99
 ### 1_2_9
 
+Model: LightGBM (with group claim-history features)
+- Minimum threshold: 0.60
+- Maximum threshold: 0.60
+- Evaluation/training split: 20% / 80%
+- Minimum samples per leaf: 100
+- Training MAE: 102.65
+- Holdout MAE: 104.66
 ### 1_2_10
+
+Model: LightGBM + CatBoost blend (with group claim-history features)
+- Minimum threshold: 0.50
+- Maximum threshold: 0.50
+- Evaluation/training split: 20% / 80%
+- Minimum samples per leaf: 100 (LightGBM; CatBoost uses depth-4 trees with no per-leaf minimum)
+- Training MAE: 102.47
+- Holdout MAE: 103.32
