@@ -27,7 +27,8 @@ Training reserves a stratified 30% holdout and selects a claim-probability
 threshold from 0.10–0.25 inclusive in steps of 0.01 (16 candidates) using five-fold
 cross-validation on the remaining 70%. The holdout does not influence threshold
 selection. Training reports CV MAE, holdout MAE, classifier AUC, and a classification
-report, then refits on all training rows and saves
+report with true/false positive and negative counts, treating actual and predicted
+`ClaimAmount > 0` as claims. It then refits on all training rows and saves
 `models/two_stage_claim_model.joblib`, replacing the file if it exists.
 Use `python -m src.train --n-splits 3` to change the fold count.
 
