@@ -45,6 +45,16 @@ LOGISTIC_REGRESSION_PARAMS = {
     "random_state": RANDOM_SEED,
 }
 
+DECISION_TREE_PARAMS = {
+    "min_samples_leaf": 5,
+    "min_samples_split": 2,
+    "max_features": None,
+    "max_depth": 5,
+    "criterion": "gini",
+    "class_weight": None,
+    "random_state": RANDOM_SEED,
+}
+
 RANDOM_FOREST_PARAMS = {
     "n_estimators": 200,
     "min_samples_leaf": 5,
@@ -103,14 +113,17 @@ DEFAULT_MODEL_ID = "two_stage"
 RANDOM_FOREST_MODEL_ID = "two_stage_random_forest"
 EXTRA_TREES_MODEL_ID = "two_stage_extra_trees"
 HIST_GRADIENT_BOOSTING_MODEL_ID = "two_stage_hist_gradient_boosting"
+DECISION_TREE_MODEL_ID = "two_stage_decision_tree"
 TREE_CLASSIFIER_PARAMS = {
     RANDOM_FOREST_MODEL_ID: RANDOM_FOREST_PARAMS,
     EXTRA_TREES_MODEL_ID: EXTRA_TREES_PARAMS,
     HIST_GRADIENT_BOOSTING_MODEL_ID: HIST_GRADIENT_BOOSTING_PARAMS,
+    DECISION_TREE_MODEL_ID: DECISION_TREE_PARAMS,
 }
 MODEL_LABELS = {
     DEFAULT_MODEL_ID: "Two-stage claim model - logistic regression + Ridge",
     RANDOM_FOREST_MODEL_ID: "Two-stage claim model - Random Forest + Ridge",
     EXTRA_TREES_MODEL_ID: "Two-stage claim model - Extra Trees + Ridge",
     HIST_GRADIENT_BOOSTING_MODEL_ID: "Two-stage claim model - Histogram Gradient Boosting + Ridge",
+    DECISION_TREE_MODEL_ID: "Two-stage claim model - Decision Tree + Ridge",
 }

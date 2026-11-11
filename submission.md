@@ -22,14 +22,17 @@ start training or Ctrl+C to cancel.
 - Minimum threshold: 0.05
 - Maximum threshold: 0.25
 - Evaluation/training split: 20% / 80%
+- Minimum samples per leaf: 50
+- Training MAE: 101.80
 - Holdout MAE: 108.50
 
 ### 1_2_2
 
 - Model: Logistic Regression + `feature1` polynomial terms + Ridge
 - Minimum threshold: 0.05
-- Maximum threshold: 0.25
+- Maximum threshold: 0.20
 - Evaluation/training split: 20% / 80%
+- Training MAE: 101.77
 - Holdout MAE: 108.52
 
 ### 1_2_3

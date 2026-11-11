@@ -8,15 +8,21 @@ unstable column.
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-from src.feature_schema import CATEGORICAL_FEATURES, NUMERIC_FEATURES, RARE_CATEGORY_MIN_FREQUENCY
+from src.feature_schema import (
+    CATEGORICAL_FEATURES, ENGINEERED_FEATURES, NUMERIC_FEATURES, RARE_CATEGORY_MIN_FREQUENCY,
+)
 
 
 def build_preprocessing_pipeline(
     min_category_frequency: int = RARE_CATEGORY_MIN_FREQUENCY,
+    include_engineered_features: bool = True,
 ) -> ColumnTransformer:
+    numeric_features = NUMERIC_FEATURES
+    if not include_engineered_features:
+        numeric_features = [column for column in NUMERIC_FEATURES if column not in ENGINEERED_FEATURES]
     return ColumnTransformer(
         transformers=[
-            ("numeric", StandardScaler(), NUMERIC_FEATURES),
+            ("numeric", StandardScaler(), numeric_features),
             (
                 "categorical",
                 OneHotEncoder(

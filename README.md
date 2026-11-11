@@ -22,6 +22,9 @@ scales numeric features and one-hot encodes categorical features, grouping rare
 categories. Histogram Gradient Boosting instead uses native categorical features
 for its classifier; Ridge retains the shared preprocessing. The workflow also
 derives squared and cubed terms from `feature1`.
+The Decision Tree preset has maximum depth 5 and uses the original 18 features
+for both classification and Ridge. To reproduce submission 1 closely, select it
+with 50 samples per leaf, threshold bounds both 0.25, 20% evaluation, and five CV folds.
 
 Training reserves a stratified 30% holdout and selects a claim-probability
 threshold from 0.10–0.25 inclusive in steps of 0.01 (16 candidates) using five-fold
@@ -38,9 +41,9 @@ Run `python -m src.train --config` for terminal prompts to adjust:
 - Minimum and maximum thresholds: 0.00–1.00 in 0.01 steps, including both bounds.
   Minimum must not exceed maximum; equal bounds evaluate one threshold.
 - Evaluation percentage: a whole number from 1–99; the remainder is for training.
-- Model: logistic regression, Random Forest, Extra Trees, or Histogram Gradient
+- Model: logistic regression, Decision Tree, Random Forest, Extra Trees, or Histogram Gradient
   Boosting, each paired with Ridge for claim severity.
-- Minimum samples per leaf for Random Forest, Extra Trees, and Histogram Gradient
+- Minimum samples per leaf for Decision Tree, Random Forest, Extra Trees, and Histogram Gradient
   Boosting: a whole number of at least 1. Enter accepts the selected model's preset.
 - CV folds: a whole number of at least 2.
 

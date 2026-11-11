@@ -10,9 +10,11 @@ from sklearn.ensemble import ExtraTreesClassifier, HistGradientBoostingClassifie
 from sklearn.linear_model import LogisticRegression, Ridge
 from sklearn.compose import TransformedTargetRegressor
 from sklearn.pipeline import Pipeline
+from sklearn.tree import DecisionTreeClassifier
 
 from src.feature_schema import (
-    DEFAULT_MODEL_ID, EXTRA_TREES_MODEL_ID, EXTRA_TREES_PARAMS,
+    DECISION_TREE_MODEL_ID, DECISION_TREE_PARAMS, DEFAULT_MODEL_ID,
+    EXTRA_TREES_MODEL_ID, EXTRA_TREES_PARAMS,
     HIST_GRADIENT_BOOSTING_MODEL_ID, HIST_GRADIENT_BOOSTING_PARAMS,
     LOGISTIC_REGRESSION_PARAMS, RANDOM_FOREST_MODEL_ID, RANDOM_FOREST_PARAMS, RIDGE_PARAMS,
 )
@@ -22,6 +24,8 @@ from src.preprocessing import build_preprocessing_pipeline
 def _build_claim_classifier(model_id):
     if model_id == DEFAULT_MODEL_ID:
         return LogisticRegression(**LOGISTIC_REGRESSION_PARAMS)
+    if model_id == DECISION_TREE_MODEL_ID:
+        return DecisionTreeClassifier(**DECISION_TREE_PARAMS)
     if model_id == RANDOM_FOREST_MODEL_ID:
         return RandomForestClassifier(**RANDOM_FOREST_PARAMS)
     if model_id == EXTRA_TREES_MODEL_ID:
@@ -40,12 +44,14 @@ def build_claim_classifier_pipeline(model_id=DEFAULT_MODEL_ID, min_samples_leaf=
         # splits can be learned independently inside each training/CV fit.
         return Pipeline([("model", classifier)])
     return Pipeline([
-        ("preprocessing", build_preprocessing_pipeline()),
+        ("preprocessing", build_preprocessing_pipeline(
+            include_engineered_features=model_id != DECISION_TREE_MODEL_ID,
+        )),
         ("model", classifier),
     ])
 
 
-def build_claim_severity_pipeline() -> Pipeline:
+def build_claim_severity_pipeline(include_engineered_features=True) -> Pipeline:
     # log1p/expm1 directly operationalizes the EDA finding that nonzero
     # claim amounts are heavily right-skewed (skew 16.44, fixed to -0.52
     # in log space), so Ridge is fit on a near-symmetric target.
@@ -55,7 +61,9 @@ def build_claim_severity_pipeline() -> Pipeline:
         inverse_func=np.expm1,
     )
     return Pipeline([
-        ("preprocessing", build_preprocessing_pipeline()),
+        ("preprocessing", build_preprocessing_pipeline(
+            include_engineered_features=include_engineered_features,
+        )),
         ("model", severity_model),
     ])
 
@@ -64,6 +72,10 @@ def build_two_stage_model(model_id, claim_probability_threshold, min_samples_lea
     """Build fresh estimators for each training run and threshold candidate."""
     return TwoStageClaimModel(
         classifier=build_claim_classifier_pipeline(model_id, min_samples_leaf=min_samples_leaf),
+        # Submission 1 used the original features in both stages.
+        regressor=build_claim_severity_pipeline(
+            include_engineered_features=model_id != DECISION_TREE_MODEL_ID,
+        ),
         claim_probability_threshold=claim_probability_threshold,
     )
 
