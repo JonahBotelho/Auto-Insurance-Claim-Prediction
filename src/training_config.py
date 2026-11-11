@@ -142,4 +142,4 @@ def confirm_training(settings, output_path):
           f"{settings.evaluation_percent}% evaluation; CV folds: {settings.n_splits}")
     print("The split is for evaluation; the saved model is refitted on all rows.")
     print(f"Model output: {output_path} (replaces the file if it already exists)")
-    return input("Start training? [y/N]: ").strip().lower() in {"y", "yes"}
+    input("Press Enter to start training, or Ctrl+C to cancel: ")

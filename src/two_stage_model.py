@@ -12,29 +12,22 @@ from sklearn.compose import TransformedTargetRegressor
 from sklearn.pipeline import Pipeline
 
 from src.feature_schema import (
-    DEFAULT_MODEL_ID, EXTRA_TREES_MODEL_ID, HIST_GRADIENT_BOOSTING_MODEL_ID,
-    RANDOM_FOREST_MODEL_ID, RANDOM_SEED,
+    DEFAULT_MODEL_ID, EXTRA_TREES_MODEL_ID, EXTRA_TREES_PARAMS,
+    HIST_GRADIENT_BOOSTING_MODEL_ID, HIST_GRADIENT_BOOSTING_PARAMS,
+    LOGISTIC_REGRESSION_PARAMS, RANDOM_FOREST_MODEL_ID, RANDOM_FOREST_PARAMS, RIDGE_PARAMS,
 )
 from src.preprocessing import build_preprocessing_pipeline
 
 
 def _build_claim_classifier(model_id):
     if model_id == DEFAULT_MODEL_ID:
-        return LogisticRegression(max_iter=1000, random_state=RANDOM_SEED)
-    if model_id in (RANDOM_FOREST_MODEL_ID, EXTRA_TREES_MODEL_ID):
-        classifier_type = (
-            RandomForestClassifier if model_id == RANDOM_FOREST_MODEL_ID else ExtraTreesClassifier
-        )
-        return classifier_type(
-            n_estimators=200, min_samples_leaf=20, max_features="sqrt",
-            n_jobs=-1, random_state=RANDOM_SEED,
-        )
+        return LogisticRegression(**LOGISTIC_REGRESSION_PARAMS)
+    if model_id == RANDOM_FOREST_MODEL_ID:
+        return RandomForestClassifier(**RANDOM_FOREST_PARAMS)
+    if model_id == EXTRA_TREES_MODEL_ID:
+        return ExtraTreesClassifier(**EXTRA_TREES_PARAMS)
     if model_id == HIST_GRADIENT_BOOSTING_MODEL_ID:
-        return HistGradientBoostingClassifier(
-            max_iter=100, learning_rate=0.1, max_leaf_nodes=15,
-            min_samples_leaf=20, l2_regularization=1.0, early_stopping="auto",
-            categorical_features="from_dtype", random_state=RANDOM_SEED,
-        )
+        return HistGradientBoostingClassifier(**HIST_GRADIENT_BOOSTING_PARAMS)
     raise ValueError(f"Unknown claim model: {model_id}")
 
 
@@ -55,7 +48,7 @@ def build_claim_severity_pipeline() -> Pipeline:
     # claim amounts are heavily right-skewed (skew 16.44, fixed to -0.52
     # in log space), so Ridge is fit on a near-symmetric target.
     severity_model = TransformedTargetRegressor(
-        regressor=Ridge(alpha=1.0),
+        regressor=Ridge(**RIDGE_PARAMS),
         func=np.log1p,
         inverse_func=np.expm1,
     )

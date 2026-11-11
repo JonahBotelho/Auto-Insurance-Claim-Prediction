@@ -115,9 +115,8 @@ def main(argv=None):
         if args.config:
             settings = prompt_settings(settings)
         X, y, partitions = _prepare_training_data(settings)
-        if args.config and not confirm_training(settings, DEFAULT_MODEL_PATH):
-            print("Training cancelled.")
-            return 0
+        if args.config:
+            confirm_training(settings, DEFAULT_MODEL_PATH)
     except (EOFError, KeyboardInterrupt):
         print("\nTraining cancelled before fitting.")
         return 130

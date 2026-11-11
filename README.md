@@ -41,16 +41,17 @@ Run `python -m src.train --config` for terminal prompts to adjust:
   Boosting, each paired with Ridge for claim severity.
 - CV folds: a whole number of at least 2.
 
-Models use fixed presets, not tuned configurations. Tree ensembles can take
-longer to train: threshold selection refits both stages for every threshold/fold.
+Edit model presets in the Model tuning section of `src/feature_schema.py`, then
+retrain to apply changes. Random Forest and Extra Trees default to 5 samples per leaf.
+Tree ensembles can take longer to train because each threshold and fold requires a refit.
 
 Enter accepts the displayed defaults, which match ordinary training;
 `--n-splits` sets the initial fold count and can be overridden at the prompt.
 Both partitions must contain zero and positive claims, and the training partition
 must have at least one example of each class per CV fold. Infeasible settings stop
-the run before fitting. After validation, review the summary and enter `y` or
-`yes` to train; any other response cancels. Ctrl+C or closed input during
-configuration also cancels before fitting. Settings apply only to that run.
+the run before fitting. After validation, review the summary and press Enter to
+start training. Ctrl+C or closed input during configuration cancels before fitting.
+Settings apply only to that run.
 
 Prediction loads the saved model and writes nonnegative, probability-weighted
 claim amounts, with zero below the selected threshold. The default output
