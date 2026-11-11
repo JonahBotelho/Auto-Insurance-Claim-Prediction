@@ -103,6 +103,11 @@ DEFAULT_MODEL_ID = "two_stage"
 RANDOM_FOREST_MODEL_ID = "two_stage_random_forest"
 EXTRA_TREES_MODEL_ID = "two_stage_extra_trees"
 HIST_GRADIENT_BOOSTING_MODEL_ID = "two_stage_hist_gradient_boosting"
+TREE_CLASSIFIER_PARAMS = {
+    RANDOM_FOREST_MODEL_ID: RANDOM_FOREST_PARAMS,
+    EXTRA_TREES_MODEL_ID: EXTRA_TREES_PARAMS,
+    HIST_GRADIENT_BOOSTING_MODEL_ID: HIST_GRADIENT_BOOSTING_PARAMS,
+}
 MODEL_LABELS = {
     DEFAULT_MODEL_ID: "Two-stage claim model - logistic regression + Ridge",
     RANDOM_FOREST_MODEL_ID: "Two-stage claim model - Random Forest + Ridge",
