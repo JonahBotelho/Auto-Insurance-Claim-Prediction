@@ -3,3 +3,10 @@ __pycache__
 .idea
 .venv
 models
+
+claimproj/data/
+claimproj/catboost_info/
+claimproj/results/*.npy
+*.joblib
+*.csv
+!claimproj/results/cv_summary.csv
