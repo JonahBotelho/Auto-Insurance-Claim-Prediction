@@ -2,9 +2,9 @@
 import numpy as np
 import pandas as pd
 
-TARGET = "ClaimAmount"
-ID_COL = "rowIndex"
-SEED = 42
+from src.feature_schema import (
+    RANDOM_SEED as SEED, ROW_INDEX_COLUMN as ID_COL, TARGET_COLUMN as TARGET,
+)
 
 
 def load_train(path="data/trainingset.csv"):

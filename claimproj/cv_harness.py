@@ -1,5 +1,5 @@
 """Repeated stratified CV scored with the real metric (MAE).
-Usage: python cv_harness.py [--repeats 3] [--models lgbm,cat] [--no-group]
+Usage from the repository root: python -m claimproj.cv_harness [--repeats 3] [--models lgbm,cat] [--no-group]
 Writes results/cv_summary.csv and results/oof_<model>.npy.
 amount_rule: 'group' predicts flagged rows from the group's past claims; 'global' uses a global quantile.
 """
@@ -9,7 +9,7 @@ import pandas as pd
 from sklearn.isotonic import IsotonicRegression
 from sklearn.metrics import log_loss, roc_auc_score
 from sklearn.model_selection import StratifiedKFold, cross_val_predict
-from common import (load_train, make_model, decide, decide_group, group_keys, fit_group_stats,
+from claimproj.common import (load_train, make_model, decide, decide_group, group_keys, fit_group_stats,
                     add_group_feats, fit_group_amounts, residual_dist)
 
 THRESHOLDS = [0.5, 0.55, 0.6, 0.7]

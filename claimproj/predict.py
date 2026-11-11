@@ -1,12 +1,12 @@
 """Write predictions for a feature file using the saved model.
-Usage: python predict.py [--input data/testset.csv] [--output predictions.csv] [--zeros]
+Usage from the repository root: python -m claimproj.predict [--input data/testset.csv] [--output predictions.csv] [--zeros]
 --zeros writes the all-zero baseline instead (a safe first submission).
 """
 import argparse
 import joblib
 import numpy as np
 import pandas as pd
-from common import load_test, group_keys, add_group_feats, decide_group, ID_COL, TARGET
+from claimproj.common import load_test, group_keys, add_group_feats, decide_group, ID_COL, TARGET
 
 
 def main():

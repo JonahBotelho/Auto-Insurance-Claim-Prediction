@@ -26,9 +26,9 @@ The Decision Tree preset has maximum depth 5 and uses the original 18 features
 for both classification and Ridge. To reproduce submission 1 closely, select it
 with 50 samples per leaf, threshold bounds both 0.25, 20% evaluation, and five CV folds.
 
-Training reserves a stratified 30% holdout and selects a claim-probability
-threshold from 0.10–0.25 inclusive in steps of 0.01 (16 candidates) using five-fold
-cross-validation on the remaining 70%. The holdout does not influence threshold
+Training reserves a stratified 38% holdout and selects a claim-probability
+threshold from 0.10–0.20 inclusive in steps of 0.01 (11 candidates) using five-fold
+cross-validation on the remaining 62%. The holdout does not influence threshold
 selection. Training reports CV MAE, training MAE on the fitted training partition,
 holdout MAE, classifier AUC, and a classification
 report with true/false positive and negative counts, treating actual and predicted
@@ -72,6 +72,13 @@ python -m src.predict --model-path models/two_stage_claim_model.joblib --input d
 
 This is a prototype: reported validation scores estimate performance on held-out
 training data; test-set accuracy is unknown without its claim labels.
+
+## Checkpoint submissions
+
+See `submission.md` for the settings and recorded scores for files 1-10.
+Submissions 1-6 use `src/`; submissions 7-10 use the separate LightGBM/CatBoost
+workflow documented in `claimproj/README.md`. Its generator writes only files
+7-10 to `data/regenerated/`, leaving the submitted CSVs in `data/` intact.
 
 ## Analysis
 

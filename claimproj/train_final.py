@@ -1,10 +1,10 @@
 """Fit the final model on all of trainingset.csv and save model.joblib.
-Usage: python train_final.py [--threshold 0.55]
+Usage from the repository root: python -m claimproj.train_final [--threshold 0.55]
 """
 import argparse
 import joblib
 import numpy as np
-from common import (load_train, make_model, group_keys, fit_group_stats, add_group_feats,
+from claimproj.common import (load_train, make_model, group_keys, fit_group_stats, add_group_feats,
                     fit_group_amounts, residual_dist)
 
 
