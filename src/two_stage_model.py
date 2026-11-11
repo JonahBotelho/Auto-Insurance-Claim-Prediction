@@ -1,24 +1,52 @@
 """
-Factory functions that build the default classifier and regressor
-pipelines for the two-stage claim model. Each one chains the shared
-preprocessing step directly into a model, so callers get a single
-object that handles raw features in and predictions out.
+Classifier presets and log-target Ridge severity for the two-stage claim
+model. Pipelines handle raw features, with native categorical support
+instead of shared preprocessing for histogram gradient boosting.
 """
 
 import numpy as np
 from sklearn.base import BaseEstimator, RegressorMixin
+from sklearn.ensemble import ExtraTreesClassifier, HistGradientBoostingClassifier, RandomForestClassifier
 from sklearn.linear_model import LogisticRegression, Ridge
 from sklearn.compose import TransformedTargetRegressor
 from sklearn.pipeline import Pipeline
 
-from src.feature_schema import RANDOM_SEED
+from src.feature_schema import (
+    DEFAULT_MODEL_ID, EXTRA_TREES_MODEL_ID, HIST_GRADIENT_BOOSTING_MODEL_ID,
+    RANDOM_FOREST_MODEL_ID, RANDOM_SEED,
+)
 from src.preprocessing import build_preprocessing_pipeline
 
 
-def build_claim_classifier_pipeline() -> Pipeline:
+def _build_claim_classifier(model_id):
+    if model_id == DEFAULT_MODEL_ID:
+        return LogisticRegression(max_iter=1000, random_state=RANDOM_SEED)
+    if model_id in (RANDOM_FOREST_MODEL_ID, EXTRA_TREES_MODEL_ID):
+        classifier_type = (
+            RandomForestClassifier if model_id == RANDOM_FOREST_MODEL_ID else ExtraTreesClassifier
+        )
+        return classifier_type(
+            n_estimators=200, min_samples_leaf=20, max_features="sqrt",
+            n_jobs=-1, random_state=RANDOM_SEED,
+        )
+    if model_id == HIST_GRADIENT_BOOSTING_MODEL_ID:
+        return HistGradientBoostingClassifier(
+            max_iter=100, learning_rate=0.1, max_leaf_nodes=15,
+            min_samples_leaf=20, l2_regularization=1.0, early_stopping="auto",
+            categorical_features="from_dtype", random_state=RANDOM_SEED,
+        )
+    raise ValueError(f"Unknown claim model: {model_id}")
+
+
+def build_claim_classifier_pipeline(model_id=DEFAULT_MODEL_ID) -> Pipeline:
+    classifier = _build_claim_classifier(model_id)
+    if model_id == HIST_GRADIENT_BOOSTING_MODEL_ID:
+        # Preserve the loader's pandas category dtypes so native categorical
+        # splits can be learned independently inside each training/CV fit.
+        return Pipeline([("model", classifier)])
     return Pipeline([
         ("preprocessing", build_preprocessing_pipeline()),
-        ("model", LogisticRegression(max_iter=1000, random_state=RANDOM_SEED)),
+        ("model", classifier),
     ])
 
 
@@ -35,6 +63,14 @@ def build_claim_severity_pipeline() -> Pipeline:
         ("preprocessing", build_preprocessing_pipeline()),
         ("model", severity_model),
     ])
+
+
+def build_two_stage_model(model_id, claim_probability_threshold):
+    """Build fresh estimators for each training run and threshold candidate."""
+    return TwoStageClaimModel(
+        classifier=build_claim_classifier_pipeline(model_id),
+        claim_probability_threshold=claim_probability_threshold,
+    )
 
 
 class TwoStageClaimModel(BaseEstimator, RegressorMixin):

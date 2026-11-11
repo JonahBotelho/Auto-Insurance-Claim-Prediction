@@ -15,14 +15,11 @@ from src.evaluation import (
     cross_validate_mae, stratified_train_validation_split, validate_evaluation_partitions,
 )
 from src.feature_schema import (
-    ALL_FEATURE_COLUMNS, DEFAULT_CV_FOLDS, DEFAULT_MODEL_ID, TARGET_COLUMN, THRESHOLD_SCALE,
+    ALL_FEATURE_COLUMNS, DEFAULT_CV_FOLDS, TARGET_COLUMN, THRESHOLD_SCALE,
 )
 from src.model_io import DEFAULT_MODEL_PATH, save_model
 from src.training_config import TrainingSettings, confirm_training, parse_fold_count, prompt_settings
-from src.two_stage_model import TwoStageClaimModel
-
-
-MODEL_FACTORIES = {DEFAULT_MODEL_ID: TwoStageClaimModel}
+from src.two_stage_model import build_two_stage_model
 
 
 def parse_args(argv=None) -> argparse.Namespace:
@@ -34,7 +31,7 @@ def parse_args(argv=None) -> argparse.Namespace:
 
 
 def _build_model(settings, threshold):
-    return MODEL_FACTORIES[settings.model_id](claim_probability_threshold=threshold / THRESHOLD_SCALE)
+    return build_two_stage_model(settings.model_id, threshold / THRESHOLD_SCALE)
 
 
 def _select_best_threshold(X_train, y_train, settings):

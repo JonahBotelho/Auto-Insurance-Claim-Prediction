@@ -16,10 +16,12 @@ python -m src.train
 python -m src.predict
 ```
 
-The two-stage model combines logistic regression for claim probability with
-Ridge regression on `log1p` positive claim amounts. Preprocessing scales numeric
-features and one-hot encodes categorical features, grouping rare categories.
-The workflow also derives squared and cubed terms from `feature1`.
+The two-stage model combines a claim-probability classifier (logistic regression
+by default) with Ridge regression on `log1p` positive claim amounts. Preprocessing
+scales numeric features and one-hot encodes categorical features, grouping rare
+categories. Histogram Gradient Boosting instead uses native categorical features
+for its classifier; Ridge retains the shared preprocessing. The workflow also
+derives squared and cubed terms from `feature1`.
 
 Training reserves a stratified 30% holdout and selects a claim-probability
 threshold from 0.10–0.25 inclusive in steps of 0.01 (16 candidates) using five-fold
@@ -34,8 +36,12 @@ Run `python -m src.train --config` for terminal prompts to adjust:
 - Minimum and maximum thresholds: 0.00–1.00 in 0.01 steps, including both bounds.
   Minimum must not exceed maximum; equal bounds evaluate one threshold.
 - Evaluation percentage: a whole number from 1–99; the remainder is for training.
-- Model: currently only the two-stage model described above.
+- Model: logistic regression, Random Forest, Extra Trees, or Histogram Gradient
+  Boosting, each paired with Ridge for claim severity.
 - CV folds: a whole number of at least 2.
+
+Models use fixed presets, not tuned configurations. Tree ensembles can take
+longer to train: threshold selection refits both stages for every threshold/fold.
 
 Enter accepts the displayed defaults, which match ordinary training;
 `--n-splits` sets the initial fold count and can be overridden at the prompt.

@@ -47,4 +47,12 @@ DEFAULT_EVALUATION_PERCENT = 30
 MIN_CV_FOLDS = 2
 DEFAULT_CV_FOLDS = 5
 DEFAULT_MODEL_ID = "two_stage"
-MODEL_LABELS = {DEFAULT_MODEL_ID: "Two-stage claim model - logistic regression + Ridge"}
+RANDOM_FOREST_MODEL_ID = "two_stage_random_forest"
+EXTRA_TREES_MODEL_ID = "two_stage_extra_trees"
+HIST_GRADIENT_BOOSTING_MODEL_ID = "two_stage_hist_gradient_boosting"
+MODEL_LABELS = {
+    DEFAULT_MODEL_ID: "Two-stage claim model - logistic regression + Ridge",
+    RANDOM_FOREST_MODEL_ID: "Two-stage claim model - Random Forest + Ridge",
+    EXTRA_TREES_MODEL_ID: "Two-stage claim model - Extra Trees + Ridge",
+    HIST_GRADIENT_BOOSTING_MODEL_ID: "Two-stage claim model - Histogram Gradient Boosting + Ridge",
+}
