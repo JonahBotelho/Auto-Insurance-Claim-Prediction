@@ -5,7 +5,7 @@ instead of shared preprocessing for histogram gradient boosting.
 """
 
 import numpy as np
-from sklearn.base import BaseEstimator, RegressorMixin
+from sklearn.base import BaseEstimator, RegressorMixin, clone
 from sklearn.ensemble import ExtraTreesClassifier, HistGradientBoostingClassifier, RandomForestClassifier
 from sklearn.linear_model import LogisticRegression, Ridge
 from sklearn.compose import TransformedTargetRegressor
@@ -13,12 +13,13 @@ from sklearn.pipeline import Pipeline
 from sklearn.tree import DecisionTreeClassifier
 
 from src.feature_schema import (
-    DECISION_TREE_MODEL_ID, DECISION_TREE_PARAMS, DEFAULT_MODEL_ID,
+    DECISION_TREE_MODEL_ID, DECISION_TREE_PARAMS, DEFAULT_MODEL_ID, DEFAULT_OVERSAMPLING_PERCENT,
     EXTRA_TREES_MODEL_ID, EXTRA_TREES_PARAMS,
     HIST_GRADIENT_BOOSTING_MODEL_ID, HIST_GRADIENT_BOOSTING_PARAMS,
     LOGISTIC_REGRESSION_PARAMS, RANDOM_FOREST_MODEL_ID, RANDOM_FOREST_PARAMS, RIDGE_PARAMS,
 )
 from src.preprocessing import build_preprocessing_pipeline
+from src.oversampling import correct_claim_probabilities, oversample_claims
 
 
 def _build_claim_classifier(model_id):
@@ -68,7 +69,10 @@ def build_claim_severity_pipeline(include_engineered_features=True) -> Pipeline:
     ])
 
 
-def build_two_stage_model(model_id, claim_probability_threshold, min_samples_leaf=None):
+def build_two_stage_model(
+    model_id, claim_probability_threshold, min_samples_leaf=None,
+    oversampling_percent=DEFAULT_OVERSAMPLING_PERCENT,
+):
     """Build fresh estimators for each training run and threshold candidate."""
     return TwoStageClaimModel(
         classifier=build_claim_classifier_pipeline(model_id, min_samples_leaf=min_samples_leaf),
@@ -77,6 +81,7 @@ def build_two_stage_model(model_id, claim_probability_threshold, min_samples_lea
             include_engineered_features=model_id != DECISION_TREE_MODEL_ID,
         ),
         claim_probability_threshold=claim_probability_threshold,
+        oversampling_percent=oversampling_percent,
     )
 
 
@@ -88,24 +93,39 @@ class TwoStageClaimModel(BaseEstimator, RegressorMixin):
     probability-weighted amount.
     """
 
-    def __init__(self, classifier=None, regressor=None, claim_probability_threshold=0.0):
+    def __init__(
+        self, classifier=None, regressor=None, claim_probability_threshold=0.0,
+        oversampling_percent=DEFAULT_OVERSAMPLING_PERCENT,
+    ):
         self.classifier = classifier
         self.regressor = regressor
         self.claim_probability_threshold = claim_probability_threshold
+        self.oversampling_percent = oversampling_percent
 
     def fit(self, X, y):
-        self.classifier_ = self.classifier or build_claim_classifier_pipeline()
-        self.regressor_ = self.regressor or build_claim_severity_pipeline()
+        self.classifier_ = clone(self.classifier) if self.classifier is not None else build_claim_classifier_pipeline()
+        self.regressor_ = clone(self.regressor) if self.regressor is not None else build_claim_severity_pipeline()
 
         has_claim = (y > 0).astype(int)
-        self.classifier_.fit(X, has_claim)
+        # This runs inside every CV fit, before fitting classifier preprocessing.
+        sampled_X, sampled_labels, self.claim_prior_odds_ratio_ = oversample_claims(
+            X, has_claim, self.oversampling_percent,
+        )
+        self.classifier_.fit(sampled_X, sampled_labels)
 
         claimed_rows = y > 0
         self.regressor_.fit(X[claimed_rows], y[claimed_rows])
         return self
 
+    def predict_claim_probability(self, X):
+        probabilities = self.classifier_.predict_proba(X)[:, 1]
+        # Saved models from before oversampling retain their original predictions.
+        return correct_claim_probabilities(
+            probabilities, getattr(self, "claim_prior_odds_ratio_", 1.0),
+        )
+
     def predict(self, X):
-        claim_probability = self.classifier_.predict_proba(X)[:, 1]
+        claim_probability = self.predict_claim_probability(X)
         severity = self.regressor_.predict(X)
         expected_amount = np.maximum(claim_probability * severity, 0)
         return np.where(

@@ -32,7 +32,8 @@ def parse_args(argv=None) -> argparse.Namespace:
 
 def _build_model(settings, threshold):
     return build_two_stage_model(settings.model_id, threshold / THRESHOLD_SCALE,
-                                 min_samples_leaf=settings.min_samples_leaf)
+                                 min_samples_leaf=settings.min_samples_leaf,
+                                 oversampling_percent=settings.oversampling_percent)
 
 
 def _select_best_threshold(X_train, y_train, settings):
@@ -65,7 +66,7 @@ def _print_holdout_results(model, X_val, y_val):
     print(f"Holdout MAE: {mean_absolute_error(y_val, holdout_predictions):.2f}")
 
     has_claim_val = (y_val > 0).astype(int)
-    claim_probabilities = model.classifier_.predict_proba(X_val)[:, 1]
+    claim_probabilities = model.predict_claim_probability(X_val)
     print(f"Max predicted claim probability (holdout): {claim_probabilities.max():.4f}")
     print(f"Holdout classifier AUC: {roc_auc_score(has_claim_val, claim_probabilities):.4f}")
     # Count the final nonzero outputs so the report reflects the selected

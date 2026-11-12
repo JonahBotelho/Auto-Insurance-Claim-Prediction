@@ -106,6 +106,11 @@ HIST_GRADIENT_BOOSTING_PARAMS = {
 
 RIDGE_PARAMS = {"alpha": 1.0}
 
+# Desired positive share after classifier-only uniform duplication; 0 disables it.
+DEFAULT_OVERSAMPLING_PERCENT = 15
+MIN_OVERSAMPLING_PERCENT = 0
+MAX_OVERSAMPLING_PERCENT = 99
+
 # Training configuration uses integer hundredths to keep threshold grids exact.
 THRESHOLD_SCALE = 100
 MIN_THRESHOLD_HUNDREDTHS = 0

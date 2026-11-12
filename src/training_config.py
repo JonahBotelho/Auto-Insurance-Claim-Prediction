@@ -9,6 +9,7 @@ from src.feature_schema import (
     DEFAULT_MAX_THRESHOLD_HUNDREDTHS,
     DEFAULT_MIN_THRESHOLD_HUNDREDTHS,
     DEFAULT_MODEL_ID,
+    DEFAULT_OVERSAMPLING_PERCENT,
     MAX_EVALUATION_PERCENT,
     MAX_THRESHOLD_HUNDREDTHS,
     MIN_CV_FOLDS,
@@ -18,6 +19,8 @@ from src.feature_schema import (
     THRESHOLD_SCALE,
     TREE_CLASSIFIER_PARAMS,
 )
+
+from src.oversampling import validate_oversampling_percent
 
 
 def _validate_integer(value, minimum, maximum, label):
@@ -37,8 +40,10 @@ class TrainingSettings:
     model_id: str = DEFAULT_MODEL_ID
     n_splits: int = DEFAULT_CV_FOLDS
     min_samples_leaf: int | None = None
+    oversampling_percent: int = DEFAULT_OVERSAMPLING_PERCENT
 
     def __post_init__(self):
+        validate_oversampling_percent(self.oversampling_percent)
         for value in (self.min_threshold, self.max_threshold):
             _validate_integer(value, MIN_THRESHOLD_HUNDREDTHS, MAX_THRESHOLD_HUNDREDTHS,
                               "Threshold in hundredths")
@@ -104,6 +109,14 @@ def _parse_leaf_size(text):
     return _validate_integer(value, 1, None, "Minimum samples per leaf")
 
 
+def _parse_oversampling_percent(text):
+    try:
+        value = int(text)
+    except ValueError as error:
+        raise ValueError("Oversampling percentage must be a whole number.") from error
+    return validate_oversampling_percent(value)
+
+
 def _prompt(label, default, parse):
     while True:
         response = input(f"{label} [{default}]: ").strip()
@@ -148,9 +161,13 @@ def prompt_settings(defaults):
         if model_id == defaults.model_id and defaults.min_samples_leaf is not None:
             leaf_default = defaults.min_samples_leaf
         leaf_size = _prompt("Minimum samples per leaf", leaf_default, _parse_leaf_size)
+    oversampling = _prompt(
+        "Target positive claim percentage (0 disables oversampling)",
+        defaults.oversampling_percent, _parse_oversampling_percent,
+    )
     folds = _prompt("CV folds", defaults.n_splits, parse_fold_count)
     return TrainingSettings(minimum, maximum, evaluation, model_id, folds,
-                            min_samples_leaf=leaf_size)
+                            min_samples_leaf=leaf_size, oversampling_percent=oversampling)
 
 
 def confirm_training(settings, output_path):
@@ -161,6 +178,8 @@ def confirm_training(settings, output_path):
         if leaf_size is None:
             leaf_size = TREE_CLASSIFIER_PARAMS[settings.model_id]["min_samples_leaf"]
         print(f"Minimum samples per leaf: {leaf_size}")
+    print(f"Classifier oversampling target: {settings.oversampling_percent}% "
+          "(0 disables; uniform duplication with claim-rate correction)")
     print(f"Thresholds: {settings.min_threshold / THRESHOLD_SCALE:.2f}-"
           f"{settings.max_threshold / THRESHOLD_SCALE:.2f} in steps of 0.01 "
           f"({len(settings.threshold_candidates())} candidates)")
