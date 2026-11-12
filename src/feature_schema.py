@@ -37,6 +37,13 @@ ENGINEERED_FEATURES = [FEATURE1_SQUARED_COLUMN, FEATURE1_CUBED_COLUMN]
 NUMERIC_FEATURES = CONTINUOUS_FEATURES + DISCRETE_COUNT_FEATURES + ENGINEERED_FEATURES
 ALL_FEATURE_COLUMNS = NUMERIC_FEATURES + CATEGORICAL_FEATURES
 
+PROFILE_HISTORY_COLUMNS = ["profile_rows", "profile_claims", "profile_rate"]
+DEFAULT_PROFILE_HISTORY_SMOOTHING = 2.0
+SEVERITY_METHOD_LABELS = {
+    "ridge": "Log-target Ridge",
+    "profile_median": "Profile median with Ridge fallback",
+}
+
 # Model tuning
 # Edit these presets before training; existing saved models retain their fitted settings.
 
@@ -104,6 +111,13 @@ HIST_GRADIENT_BOOSTING_PARAMS = {
     "random_state": RANDOM_SEED,
 }
 
+HIST_CONFIG_OPTIONS = {
+    "max_iter": ("Boosting iterations", int, 1),
+    "learning_rate": ("Learning rate", float, 0),
+    "max_leaf_nodes": ("Maximum leaf nodes", int, 2),
+    "l2_regularization": ("L2 regularization", float, 0),
+}
+
 RIDGE_PARAMS = {"alpha": 1.0}
 
 # Desired positive share after classifier-only uniform duplication; 0 disables it.
@@ -113,6 +127,7 @@ MAX_OVERSAMPLING_PERCENT = 99
 
 # Training configuration uses integer hundredths to keep threshold grids exact.
 THRESHOLD_SCALE = 100
+THRESHOLD_SUBDIVISIONS = 10  # Support thousandths while retaining existing hundredth-unit settings.
 MIN_THRESHOLD_HUNDREDTHS = 0
 MAX_THRESHOLD_HUNDREDTHS = 100
 DEFAULT_MIN_THRESHOLD_HUNDREDTHS = 10

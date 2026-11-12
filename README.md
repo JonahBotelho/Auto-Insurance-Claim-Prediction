@@ -24,7 +24,14 @@ for its classifier; Ridge retains the shared preprocessing. The workflow also
 derives squared and cubed terms from `feature1`.
 The Decision Tree preset has maximum depth 5 and uses the original 18 features
 for both classification and Ridge. To reproduce submission 1 closely, select it
-with 50 samples per leaf, threshold bounds both 0.25, 20% evaluation, and five CV folds.
+with 50 samples per leaf, threshold bounds both 0.25, 20% evaluation, five CV folds,
+and oversampling set to 0.
+
+Classifier training uniformly duplicates positive rows to target 15% claims
+by default. Each CV fit samples only its training rows; Ridge uses the original
+positive rows. Prediction corrects classifier probabilities back toward the
+original claim rate before thresholding and weighting severity. This correction
+is an approximation. Targets below the existing claim rate leave the rows unchanged.
 
 Training reserves a stratified 38% holdout and selects a claim-probability
 threshold from 0.10–0.20 inclusive in steps of 0.01 (11 candidates) using five-fold
@@ -36,21 +43,19 @@ report with true/false positive and negative counts, treating actual and predict
 `models/two_stage_claim_model.joblib`, replacing the file if it exists.
 Use `python -m src.train --n-splits 3` to change the fold count.
 
-Run `python -m src.train --config` for terminal prompts to adjust:
+Run `python -m src.train --config` to adjust thresholds (up to three decimal
+places), the evaluation percentage, model, leaf size, oversampling, profile-history
+features and smoothing, severity method, Ridge alpha, amount multiplier and CV folds.
+Histogram Gradient Boosting also prompts for iterations, learning rate, maximum
+leaf nodes and L2 regularization. Threshold ranges advance by 0.01 and include
+both bounds; equal bounds evaluate one threshold. Oversampling accepts 0-99
+(0 disables it); the default is 15% of final classifier training rows.
 
-- Minimum and maximum thresholds: 0.00–1.00 in 0.01 steps, including both bounds.
-  Minimum must not exceed maximum; equal bounds evaluate one threshold.
-- Evaluation percentage: a whole number from 1–99; the remainder is for training.
-- Model: logistic regression, Decision Tree, Random Forest, Extra Trees, or Histogram Gradient
-  Boosting, each paired with Ridge for claim severity.
-- Minimum samples per leaf for Decision Tree, Random Forest, Extra Trees, and Histogram Gradient
-  Boosting: a whole number of at least 1. Enter accepts the selected model's preset.
-- CV folds: a whole number of at least 2.
-
-Edit model presets in the Model tuning section of `src/feature_schema.py`, then
-retrain to apply changes. Configuration can override leaf size for one training run,
-including its CV fits, holdout fit, and full-data refit.
-Tree ensembles can take longer to train because each threshold and fold requires a refit.
+Profile history groups exact feature profiles. Each fit builds statistics from
+its own training partition and excludes each row's own label when fitting the
+classifier. Profile-median severity uses matching positive training claims,
+falling back to log-target Ridge for profiles without positive history.
+Training MAE is in-sample and profile summaries include those training rows.
 
 Enter accepts the displayed defaults, which match ordinary training;
 `--n-splits` sets the initial fold count and can be overridden at the prompt.

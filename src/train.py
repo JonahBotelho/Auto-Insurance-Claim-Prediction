@@ -31,9 +31,14 @@ def parse_args(argv=None) -> argparse.Namespace:
 
 
 def _build_model(settings, threshold):
-    return build_two_stage_model(settings.model_id, threshold / THRESHOLD_SCALE,
+    return build_two_stage_model(settings.model_id, float(threshold) / THRESHOLD_SCALE,
                                  min_samples_leaf=settings.min_samples_leaf,
-                                 oversampling_percent=settings.oversampling_percent)
+                                 oversampling_percent=settings.oversampling_percent,
+                                 classifier_params=settings.classifier_params,
+                                 use_profile_history=settings.use_profile_history,
+                                 profile_history_smoothing=settings.profile_history_smoothing,
+                                 severity_method=settings.severity_method, ridge_alpha=settings.ridge_alpha,
+                                 severity_scale=settings.severity_scale)
 
 
 def _select_best_threshold(X_train, y_train, settings):
@@ -49,15 +54,15 @@ def _select_best_threshold(X_train, y_train, settings):
             ))
         except Exception as error:
             raise ValueError(f"Cross-validation failed at threshold "
-                             f"{threshold / THRESHOLD_SCALE:.2f}: {error}") from error
+                             f"{threshold / THRESHOLD_SCALE:.3f}: {error}") from error
         if fold_scores.size != settings.n_splits or not np.isfinite(fold_scores).all():
             raise ValueError("Cross-validation returned missing or nonfinite scores; training stopped.")
         mean_mae = fold_scores.mean()
-        print(f"Threshold {threshold / THRESHOLD_SCALE:.2f}: mean CV MAE = {mean_mae:.2f}")
+        print(f"Threshold {threshold / THRESHOLD_SCALE:.3f}: mean CV MAE = {mean_mae:.2f}")
         if mean_mae < best_mean_mae:
             best_mean_mae = mean_mae
             best_threshold = threshold
-    print(f"Selected threshold {best_threshold / THRESHOLD_SCALE:.2f} (mean CV MAE {best_mean_mae:.2f})")
+    print(f"Selected threshold {best_threshold / THRESHOLD_SCALE:.3f} (mean CV MAE {best_mean_mae:.2f})")
     return best_threshold
 
 
