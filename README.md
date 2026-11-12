@@ -46,10 +46,37 @@ Use `python -m src.train --n-splits 3` to change the fold count.
 Run `python -m src.train --config` to adjust thresholds (up to three decimal
 places), the evaluation percentage, model, leaf size, oversampling, profile-history
 features and smoothing, severity method, Ridge alpha, amount multiplier and CV folds.
+The last prompt sets the evaluation/model seed (default 42); `--seed 44` also
+sets its initial value. It controls the holdout, CV folds and classifier.
+Oversampling keeps its fixed sampling seed of 42 to match the metric study.
 Histogram Gradient Boosting also prompts for iterations, learning rate, maximum
 leaf nodes and L2 regularization. Threshold ranges advance by 0.01 and include
 both bounds; equal bounds evaluate one threshold. Oversampling accepts 0-99
 (0 disables it); the default is 15% of final classifier training rows.
+
+To reproduce dashboard run **1338**, use `python -m src.train --config --seed 44`
+and copy its dashboard config inputs. Settings: threshold bounds both **0.361**,
+25% evaluation, Histogram Gradient Boosting, leaf size 50, 125 iterations,
+learning rate 0.15, 9 leaf nodes, L2 5, 30% oversampling, profile history enabled,
+smoothing 0.25, profile-median severity, Ridge alpha 0.01 and multiplier 1.4.
+Keep seed **44** at the last prompt; the fixed threshold makes CV fold count
+irrelevant to its holdout score. Expected holdout: MAE 94.1284, precision 47.40%,
+recall 44.72%. Saving still refits on all rows, so those are evaluation scores.
+For any dashboard result, choose **View → Download configuration**, place
+`run-<id>.json` in the repository folder, then run:
+
+```powershell
+python -m src.train --config run-1517.json
+```
+
+This supports all dashboard classifiers, past-amount history, unweighted medians,
+quantile severity and amount caps. For LightGBM, CatBoost or XGBoost, first install
+`src/optional_requirements.txt`. Review the summary and press Enter to train;
+the saved model works with `src.predict`. Plain `--config` remains interactive.
+In JSON, `weighted_profile` weights profile medians by probability;
+`profile_median` uses the median directly.
+Runs without retained score settings export documented defaults for those
+missing values; their exact historical result cannot be recovered.
 
 Profile history groups exact feature profiles. Each fit builds statistics from
 its own training partition and excludes each row's own label when fitting the
@@ -65,8 +92,8 @@ the run before fitting. After validation, review the summary and press Enter to
 start training. Ctrl+C or closed input during configuration cancels before fitting.
 Settings apply only to that run.
 
-Prediction loads the saved model and writes nonnegative, probability-weighted
-claim amounts, with zero below the selected threshold. The default output
+Prediction loads the saved model and writes nonnegative claim amounts using the
+configured severity rule, with zero below the selected threshold. The default output
 **overwrites `data/submission.csv`**, preserving test-set row order and the
 `rowIndex,ClaimAmount` columns. It prints the non-zero claim count, total rows,
 and non-zero percentage to four decimal places. Override paths as needed:

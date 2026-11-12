@@ -16,7 +16,7 @@ from src.feature_schema import (
     EXTRA_TREES_MODEL_ID, EXTRA_TREES_PARAMS,
     HIST_GRADIENT_BOOSTING_MODEL_ID, HIST_GRADIENT_BOOSTING_PARAMS,
     LOGISTIC_REGRESSION_PARAMS, RANDOM_FOREST_MODEL_ID, RANDOM_FOREST_PARAMS, RIDGE_PARAMS,
-    DEFAULT_PROFILE_HISTORY_SMOOTHING, PROFILE_HISTORY_COLUMNS, SEVERITY_METHOD_LABELS,
+    DEFAULT_PROFILE_HISTORY_SMOOTHING, PROFILE_HISTORY_COLUMNS, RANDOM_SEED, SEVERITY_METHOD_LABELS,
 )
 from src.preprocessing import build_preprocessing_pipeline
 from src.oversampling import correct_claim_probabilities, oversample_claims
@@ -39,9 +39,10 @@ def _build_claim_classifier(model_id):
 
 def build_claim_classifier_pipeline(
     model_id=DEFAULT_MODEL_ID, min_samples_leaf=None, classifier_params=None,
-    use_profile_history=False,
+    use_profile_history=False, random_seed=RANDOM_SEED,
 ) -> Pipeline:
     classifier = _build_claim_classifier(model_id)
+    classifier.set_params(random_state=random_seed)
     if min_samples_leaf is not None:
         classifier.set_params(min_samples_leaf=min_samples_leaf)
     if classifier_params:
@@ -79,13 +80,13 @@ def build_two_stage_model(
     model_id, claim_probability_threshold, min_samples_leaf=None,
     oversampling_percent=DEFAULT_OVERSAMPLING_PERCENT, classifier_params=None,
     use_profile_history=False, profile_history_smoothing=DEFAULT_PROFILE_HISTORY_SMOOTHING,
-    severity_method="ridge", ridge_alpha=None, severity_scale=1.0,
+    severity_method="ridge", ridge_alpha=None, severity_scale=1.0, random_seed=RANDOM_SEED,
 ):
     """Build fresh estimators for each training run and threshold candidate."""
     return TwoStageClaimModel(
         classifier=build_claim_classifier_pipeline(
             model_id, min_samples_leaf=min_samples_leaf, classifier_params=classifier_params,
-            use_profile_history=use_profile_history,
+            use_profile_history=use_profile_history, random_seed=random_seed,
         ),
         # Submission 1 used the original features in both stages.
         regressor=build_claim_severity_pipeline(

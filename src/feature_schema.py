@@ -38,6 +38,20 @@ NUMERIC_FEATURES = CONTINUOUS_FEATURES + DISCRETE_COUNT_FEATURES + ENGINEERED_FE
 ALL_FEATURE_COLUMNS = NUMERIC_FEATURES + CATEGORICAL_FEATURES
 
 PROFILE_HISTORY_COLUMNS = ["profile_rows", "profile_claims", "profile_rate"]
+PROFILE_LOG_AMOUNT_COLUMN = "profile_log_amount"
+CONFIG_FILE_SCHEMA_VERSION = 1
+DASHBOARD_CLASSIFIER_LABELS = {
+    "hist": "Histogram Gradient Boosting", "lgbm": "LightGBM",
+    "cat": "CatBoost (numeric categories)", "cat_native": "CatBoost (native categories)",
+    "xgb": "XGBoost", "forest": "Random Forest (numeric categories)",
+    "extra": "Extra Trees (numeric categories)", "posterior": "Profile posterior",
+}
+DASHBOARD_SEVERITY_LABELS = {
+    "weighted_profile": "Probability × profile median, with Ridge fallback",
+    "weighted_ridge": "Probability × Ridge severity",
+    "profile_median": "Unweighted profile median, with Ridge fallback",
+    "mixture_quantile": "Profile residual quantile (minimum quantile 0.05)",
+}
 DEFAULT_PROFILE_HISTORY_SMOOTHING = 2.0
 SEVERITY_METHOD_LABELS = {
     "ridge": "Log-target Ridge",
@@ -50,8 +64,9 @@ SEVERITY_METHOD_LABELS = {
 # Categories with fewer rows than this get bucketed into "infrequent" by the encoder.
 RARE_CATEGORY_MIN_FREQUENCY = 30
 
-# Fixed seed so splits/CV folds are reproducible across runs and teammates.
+# Default for evaluation/classifiers; oversampling retains this fixed sampling seed.
 RANDOM_SEED = 42
+MAX_RANDOM_SEED = 2**32 - 1
 
 LOGISTIC_REGRESSION_PARAMS = {
     "C": 1.0,

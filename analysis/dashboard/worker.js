@@ -19,6 +19,7 @@ self.onmessage = async ({data: message}) => {
     for (const run of runs) {
       metadata[run.fit_id] = run;
       matchingRun[run.fit_id] = (!filters.evaluation || run.evaluation_percent === filters.evaluation)
+        && (filters.seed === null || filters.seed === undefined || (run.seed ?? 42) === filters.seed)
         && (!filters.runId || run.fit_id === filters.runId) ? 1 : 0;
     }
     const indices = new Int32Array(maximumId + 1).fill(-1);
@@ -30,7 +31,7 @@ self.onmessage = async ({data: message}) => {
       if (!matchingRun[id]) continue;
       const tp = data.getUint16(offset + 6, true);
       const fp = data.getUint16(offset + 8, true);
-      const precision = tp / (tp + fp);
+      const precision = tp + fp > 0 ? tp / (tp + fp) : 0;
       const recall = tp / metadata[id].claims;
       const mae = data.getFloat64(offset + 10, true);
       if ((filters.maeMin !== null && mae < filters.maeMin)

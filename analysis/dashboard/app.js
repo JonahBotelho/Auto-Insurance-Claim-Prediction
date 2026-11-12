@@ -23,6 +23,10 @@ for (const value of [...new Set(dataset.runs.map(run => run.evaluation_percent))
   option.value = value; option.textContent = value + "% evaluation / " + (100-value) + "% training";
   elements.evaluation.append(option);
 }
+for (const value of [...new Set(dataset.runs.map(run => run.seed ?? 42))].sort((a,b) => a-b)) {
+  const option = document.createElement("option"); option.value = value; option.textContent = value;
+  elements.seed.append(option);
+}
 const workerUrl = URL.createObjectURL(new Blob([elements["worker-source"].textContent], {type:"text/javascript"}));
 const worker = new Worker(workerUrl);
 worker.postMessage({type:"init", runs:dataset.runs, count:dataset.scoreCount,
@@ -53,6 +57,7 @@ function readFilters() {
     throw new Error("Run ID must be a positive whole number.");
   filters.runId = id;
   filters.evaluation = elements.evaluation.value ? Number(elements.evaluation.value) : null;
+  filters.seed = elements.seed.value ? Number(elements.seed.value) : null;
   filters.includeMissing = elements.includeMissing.checked;
   const bounds = metricInputs.some(key => filters[key] !== null);
   elements.includeMissing.disabled = bounds;
@@ -106,6 +111,7 @@ function cell(text, className = "") {
   element.textContent = text; element.className = className; return element;
 }
 function render() {
+  if (elements.pageSize.value === "all") pageSize = Math.max(1, rows.length);
   const scored = rows.filter(row => row.hasMetrics).length;
   elements.resultCount.textContent = numbers.format(rows.length) + " matching runs / "
     + numbers.format(scored) + " scored / " + numbers.format(rows.length-scored) + " without saved metrics";
@@ -116,6 +122,11 @@ function render() {
   for (const row of rows.slice(start,start+pageSize)) {
     const tr = document.createElement("tr"); tr.dataset.run = row.fit_id;
     const id = cell(String(row.fit_id));
+    if (row.status) {
+      const note = document.createElement("span");
+      note.className = "availability";
+      note.textContent = row.status + " / " + row.name + " / seed " + row.seed; id.append(note);
+    }
     if (!row.hasMetrics) {
       const note = document.createElement("span");
       note.className = "availability"; note.textContent = "No saved qualifying metrics"; id.append(note);
@@ -146,40 +157,10 @@ function render() {
 }
 function openRun(id) {
   const row = rows.find(item => item.fit_id === id);
-  if (!row) return;
-  elements.dialogTitle.textContent = "Run " + id;
-  elements.dialogMetrics.textContent = row.hasMetrics
-    ? "MAE " + decimal(row.mae) + " / Precision " + percent(row.precision) + " / Recall " + percent(row.recall)
-    : "No saved qualifying metrics";
-  const details = [
-    ["Classifier","Histogram Gradient Boosting"],
-    ["Evaluation / training",row.evaluation_percent + "% / " + (100-row.evaluation_percent) + "%"],
-    ["Training / evaluation rows",numbers.format(row.training_rows) + " / " + numbers.format(row.holdout_rows)],
-    ["Saved qualifying configurations",numbers.format(row.qualifying)],
-    ["Threshold",row.hasMetrics ? decimal(row.threshold,3) : "Unavailable"],
-    ["Boosting iterations",row.max_iter],["Learning rate",row.learning_rate],
-    ["Maximum leaf nodes",row.max_leaf_nodes],["Minimum samples per leaf",row.min_samples_leaf],
-    ["L2 regularization",row.l2_regularization],["Oversampling target",row.oversampling_percent + "%"],
-    ["Profile history","Enabled"],["History smoothing",row.smoothing],
-    ["Severity method","Profile median with Ridge fallback"],
-    ["Ridge alpha",row.hasMetrics ? row.alpha : "Unavailable"],
-    ["Severity multiplier",row.hasMetrics ? row.scale : "Unavailable"],
-  ];
-  elements.settingsList.replaceChildren();
-  for (const [label,value] of details) {
-    const term = document.createElement("dt"), description = document.createElement("dd");
-    term.textContent = label; description.textContent = value; elements.settingsList.append(term,description);
-  }
-  elements.configSection.hidden = !row.hasMetrics;
-  if (row.hasMetrics) elements.configValues.value = [
-    decimal(row.threshold,3),decimal(row.threshold,3),row.evaluation_percent,4,
-    row.min_samples_leaf,row.max_iter,row.learning_rate,row.max_leaf_nodes,row.l2_regularization,
-    row.oversampling_percent,"yes",row.smoothing,2,row.alpha,row.scale,5,
-  ].join("\n") + "\n";
-  elements.copyStatus.textContent = ""; elements.runDialog.showModal();
+  if (row) showRunDetails(row);
 }
 function exportCsv() {
-  const fields = ["fit_id","evaluation_percent","mae","precision","recall","threshold","alpha","scale","tp","fp",
+  const fields = ["fit_id","status","name","severity_method","evaluation_percent","mae","precision","recall","threshold","alpha","scale","tp","fp",
     "max_iter","learning_rate","max_leaf_nodes","min_samples_leaf","l2_regularization","oversampling_percent","smoothing","hasMetrics"];
   const lines = [fields.join(",")];
   for (const row of rows) lines.push(fields.map(key => missing(row[key]) ? "" : String(row[key])).join(","));
@@ -188,35 +169,32 @@ function exportCsv() {
   setTimeout(() => URL.revokeObjectURL(url),1000);
 }
 for (const key of [...metricInputs,"runId"]) elements[key].addEventListener("input",queueQuery);
-elements.evaluation.addEventListener("change",query); elements.includeMissing.addEventListener("change",query);
+elements.evaluation.addEventListener("change",query); elements.seed.addEventListener("change",query);
+elements.includeMissing.addEventListener("change",query);
 elements.priority.addEventListener("change",() => {
   sortKey = elements.priority.value; sortDirection = sortKey === "mae" ? 1 : -1; query();
 });
 elements.reset.addEventListener("click",() => {
   for (const key of [...metricInputs,"runId"]) elements[key].value = "";
-  elements.evaluation.value = ""; elements.includeMissing.checked = true; query();
+  elements.evaluation.value = ""; elements.seed.value = ""; elements.includeMissing.checked = true; query();
 });
 elements.previousLimits.addEventListener("click",() => {
   for (const key of metricInputs) elements[key].value = "";
-  elements.maeMax.value = 100; elements.precisionMin.value = 45; elements.recallMin.value = 20; query();
+  elements.maeMax.value = 96; elements.precisionMin.value = 45; elements.recallMin.value = 30; query();
 });
 for (const button of document.querySelectorAll("[data-sort]")) button.addEventListener("click",() => {
   const key = button.dataset.sort;
   sortDirection = key === sortKey ? -sortDirection : ["precision","recall","tp"].includes(key) ? -1 : 1;
   sortKey = key; page = 0; orderRows(); render();
 });
-elements.pageSize.addEventListener("change",() => {pageSize = Number(elements.pageSize.value); page = 0; render();});
+elements.pageSize.addEventListener("change",() => {
+  pageSize = elements.pageSize.value === "all" ? Math.max(1, rows.length) : Number(elements.pageSize.value);
+  page = 0; render();
+});
 elements.previous.addEventListener("click",() => {page--;render();}); elements.next.addEventListener("click",() => {page++;render();});
 elements.tableBody.addEventListener("click",event => {
   const button = event.target.closest("[data-open-run]"); if (button) openRun(Number(button.dataset.openRun));
 });
 elements.closeDialog.addEventListener("click",() => elements.runDialog.close());
-elements.copyConfig.addEventListener("click",async () => {
-  try { await navigator.clipboard.writeText(elements.configValues.value); }
-  catch {
-    elements.configValues.focus(); elements.configValues.select();
-    if (!document.execCommand("copy")) {elements.copyStatus.textContent = "Select and copy the inputs manually.";return;}
-  }
-  elements.copyStatus.textContent = "Copied";
-});
+setupReproductionActions();
 elements.download.addEventListener("click",exportCsv);
