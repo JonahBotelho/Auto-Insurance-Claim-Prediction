@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Claim model run explorer</title>
+<style>/* STYLES */</style>
+</head>
+<body>
+<header class="masthead"><div class="brand">COMP4983 <span>/ Claim experiments</span></div><span class="local-label">Local dataset</span></header>
+<main>
+<section class="intro">
+<div><h1>Model run explorer</h1><p>Compare holdout results and inspect the settings behind each run.</p></div>
+<button id="download" class="primary" disabled>Export current results</button>
+</section>
+<div class="dataset-summary" id="datasetSummary"></div>
+<section class="panel filters" aria-labelledby="filterTitle">
+<div class="section-line"><h2 id="filterTitle">Filter results</h2><button id="reset" class="text-button">Clear filters</button></div>
+<div class="filter-grid">
+<fieldset><legend>MAE</legend><div class="range"><label>Minimum<input id="maeMin" type="number" min="0" step="any" placeholder="Any"></label><label>Maximum<input id="maeMax" type="number" min="0" step="any" placeholder="Any"></label></div></fieldset>
+<fieldset><legend>Precision <span>%</span></legend><div class="range"><label>Minimum<input id="precisionMin" type="number" min="0" max="100" step="any" placeholder="Any"></label><label>Maximum<input id="precisionMax" type="number" min="0" max="100" step="any" placeholder="Any"></label></div></fieldset>
+<fieldset><legend>Recall <span>%</span></legend><div class="range"><label>Minimum<input id="recallMin" type="number" min="0" max="100" step="any" placeholder="Any"></label><label>Maximum<input id="recallMax" type="number" min="0" max="100" step="any" placeholder="Any"></label></div></fieldset>
+<div class="select-field"><label for="evaluation">Evaluation split</label><select id="evaluation"><option value="">All splits</option></select></div>
+<div class="select-field"><label for="runId">Run ID</label><input id="runId" type="number" min="1" step="1" placeholder="All runs"></div>
+</div>
+<div class="filter-bottom"><label class="checkbox"><input id="includeMissing" type="checkbox" checked> Include runs without saved metrics</label><button id="previousLimits" class="secondary">Apply previous limits</button></div>
+<p id="filterError" class="error" role="alert" hidden></p>
+</section>
+<section class="panel results" aria-labelledby="resultsTitle">
+<div class="results-toolbar"><div><h2 id="resultsTitle">Runs</h2><p id="resultCount" role="status" aria-live="polite">Loading saved configurations...</p></div><label class="configuration-choice">Choose configuration per run<select id="priority"><option value="mae">Lowest matching MAE</option><option value="precision">Highest matching precision</option><option value="recall">Highest matching recall</option></select></label></div>
+<p class="table-note">Filters apply before choosing one configuration per run. Column headings sort the selected rows.</p>
+<div class="table-scroll">
+<table id="runTable">
+<thead><tr>
+<th aria-sort="none"><button data-sort="fit_id">Run <span></span></button></th>
+<th aria-sort="none"><button data-sort="evaluation_percent">Eval % <span></span></button></th>
+<th aria-sort="ascending"><button data-sort="mae">MAE <span>▲</span></button></th>
+<th aria-sort="none"><button data-sort="precision">Precision <span></span></button></th>
+<th aria-sort="none"><button data-sort="recall">Recall <span></span></button></th>
+<th aria-sort="none"><button data-sort="threshold">Threshold <span></span></button></th>
+<th aria-sort="none"><button data-sort="tp">TP <span></span></button></th>
+<th aria-sort="none"><button data-sort="fp">FP <span></span></button></th>
+<th aria-sort="none"><button data-sort="oversampling_percent">Oversampling % <span></span></button></th>
+<th>Settings</th>
+</tr></thead>
+<tbody id="tableBody"><tr><td colspan="10" class="empty">Loading saved configurations...</td></tr></tbody>
+</table>
+</div>
+<div class="pagination"><label>Rows per page<select id="pageSize"><option>25</option><option selected>50</option><option>100</option><option value="1000">All</option></select></label><span id="pageInfo"></span><div><button id="previous">Previous</button><button id="next">Next</button></div></div>
+</section>
+<details class="coverage"><summary>Dataset coverage and interpretation</summary><p>All 1,000 classifier fits are included. Saved metric configurations cover precision above 45%, MAE below 100 and recall above 20%. Discarded scores cannot be recovered by relaxing the filters. Runs without saved scores are labeled “No saved qualifying metrics”; metric filters exclude unavailable values.</p><p>Evaluation percentages use different held-out rows. These scores were selected on repeatedly inspected holdouts and are exploratory.</p></details>
+</main>
+<dialog id="runDialog">
+<div class="dialog-heading"><div><p class="eyebrow">Training settings</p><h2 id="dialogTitle"></h2></div><button id="closeDialog" aria-label="Close settings">Close</button></div>
+<p id="dialogMetrics"></p>
+<dl id="settingsList"></dl>
+<div id="configSection"><label for="configValues">Inputs for <code>python -m src.train --config</code>, in prompt order</label><textarea id="configValues" readonly rows="9" spellcheck="false"></textarea><button id="copyConfig" class="primary">Copy config inputs</button><span id="copyStatus" role="status"></span></div>
+</dialog>
+<script id="run-data" type="application/json">/* RUN_DATA */</script>
+<script id="score-data" type="application/octet-stream">/* SCORE_DATA */</script>
+<script id="worker-source" type="text/plain">/* WORKER */</script>
+<script>/* APP */</script>
+</body>
+</html>
