@@ -112,6 +112,9 @@ Submissions 1-6 use `src/`; submissions 7-10 use the separate LightGBM/CatBoost
 workflow documented in `claimproj/README.md`. Its generator writes only files
 7-10 to `data/regenerated/`, leaving the submitted CSVs in `data/` intact.
 
+Run `python -m src.generate_checkpoint2_candidates` to write `2_2_1.csv`
+through `2_2_10.csv` to `data/`.
+
 ## Analysis
 
 `analysis/` contains exploratory scripts; `src/` contains the prediction workflow.
