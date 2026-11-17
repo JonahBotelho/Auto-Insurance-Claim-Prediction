@@ -74,7 +74,7 @@ python -m src.train --config run-1517.json
 ```
 
 This supports all dashboard classifiers, past-amount history, unweighted medians,
-quantile severity and amount caps. For LightGBM, CatBoost or XGBoost, first install
+quantile severity and amount caps. For CatBoost or XGBoost, first install
 `src/optional_requirements.txt`. Review the summary and press Enter to train;
 the saved model works with `src.predict`. Plain `--config` remains interactive.
 In JSON, `weighted_profile` weights profile medians by probability;
@@ -111,13 +111,19 @@ training data; test-set accuracy is unknown without its claim labels.
 
 ## Checkpoint submissions
 
-See `submission.md` for the settings and recorded scores for files 1-10.
-Submissions 1-6 use `src/`; submissions 7-10 use the separate LightGBM/CatBoost
+See `submission.md` for both checkpoint selections and their recorded scores.
+Checkpoint 1 submissions 1-6 use `src/`; submissions 7-10 use the separate LightGBM/CatBoost
 workflow documented in `claimproj/README.md`. Its generator writes only files
 7-10 to `data/regenerated/`, leaving the submitted CSVs in `data/` intact.
 
-Run `python -m src.generate_checkpoint2_candidates` to write `2_2_1.csv`
-through `2_2_10.csv` to `data/`.
+The current checkpoint 2 selection is in `submission.md`, with frozen settings in
+`configs/checkpoint2/`. Install `src/requirements.txt`, then run
+`python -m src.generate_checkpoint2_candidates` to write `2_2_1.csv` through
+`2_2_10.csv`, training metrics and `checkpoint2_upload_comments.txt` directly to `data/`.
+Use `--submission 2_2_1` for one file. Historical blend evaluations remain available
+through `python -m analysis.evaluate_checkpoint2`.
+The generator replaces the current `data/2_2_*.csv` files when rerun. Keep source,
+configs and documentation in the repository; package the source manually when submitting.
 
 ## Analysis
 
@@ -137,7 +143,8 @@ seed and coverage filters control comparisons. Mean MAE, matched all-zero mean
 MAE, absolute/percentage improvement, precision, recall, mean F1 and aggregate are shown.
 Mean F1 averages each seed's claim-detection F1 (0–1; higher is better),
 with zero when precision and recall are both zero. It is sortable and included in exports.
-Checkpoint 2 retains its five documented 25% holdouts (seeds 42–46).
+The historical checkpoint source retains its original names and five 25% holdouts
+(seeds 42–46); the current selection's names and cohorts are in `submission.md`.
 Star rows to favourite their exact configuration and seed cohort; **Favourites only**
 shows saved rows alongside the other filters. Bookmarks persist in browser local
 storage for the same page/browser; if storage is blocked, they last for the session.

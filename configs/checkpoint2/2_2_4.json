@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "classifier": {
+    "family": "lgbm",
+    "iterations": 300,
+    "rate": 0.1,
+    "depth": 3,
+    "l2": 75.0,
+    "oversampling": 45,
+    "smoothing": 1.0,
+    "amount_history": true,
+    "name": "Tuned five-seed 314"
+  },
+  "threshold": 0.125,
+  "evaluation_percent": 25,
+  "random_seed": 42,
+  "severity_method": "mixture_quantile",
+  "ridge_alpha": 0.01,
+  "severity_scale": 0.9,
+  "amount_cap": 2500,
+  "n_splits": 5
+}

@@ -1,92 +1,161 @@
-"""Generate ten checkpoint-2 submissions from the validated HGB blend."""
+"""Generate the ten screenshot-selected checkpoint submissions and training MAEs."""
+
+import os
+os.environ.setdefault('OMP_NUM_THREADS', '2')
+os.environ.setdefault('OPENBLAS_NUM_THREADS', '1')
 
 import argparse
+import hashlib
+from importlib.metadata import PackageNotFoundError, version
+import json
 from pathlib import Path
+import platform
 
 import numpy as np
 import pandas as pd
 
+from src.dashboard_config import validate_dashboard_config
 from src.dashboard_model import DashboardClaimModel
-from src.data_loading import load_test_data, load_training_data
-from src.feature_schema import ALL_FEATURE_COLUMNS, RANDOM_SEED, ROW_INDEX_COLUMN, TARGET_COLUMN
+from src.data_loading import DEFAULT_TEST_PATH, DEFAULT_TRAINING_PATH, load_test_data, load_training_data
+from src.feature_schema import ALL_FEATURE_COLUMNS, MAX_RANDOM_SEED, RANDOM_SEED, ROW_INDEX_COLUMN, TARGET_COLUMN
+
+ROOT = Path(__file__).resolve().parents[1]
+CONFIG_DIRECTORY = ROOT / 'configs/checkpoint2'
+DEFAULT_OUTPUT_DIRECTORY = ROOT / 'data'
 
 
-PRIMARY_SETTINGS = {
-    "family": "hist", "iterations": 125, "rate": 0.15, "leaves": 9,
-    "leaf": 50, "l2": 5.0, "oversampling": 30, "smoothing": 0.25,
-    "early_stopping": "auto",
-}
-SECONDARY_SETTINGS = {
-    "family": "hist", "iterations": 250, "rate": 0.1, "leaves": 15,
-    "leaf": 75, "l2": 10.0, "oversampling": 55, "smoothing": 0.5,
-    "early_stopping": "auto", "amount_history": True,
-}
-# The first nine candidates cover the MAE, balanced, and F1 operating points
-# confirmed across seeds 42–46. Candidate 10 is a standalone F1 hedge.
-CANDIDATES = (
-    ("2_2_1.csv", 0.4, 0.6, 0.32),
-    ("2_2_2.csv", 0.4, 0.6, 0.34),
-    ("2_2_3.csv", 0.4, 0.6, 0.36),
-    ("2_2_4.csv", 0.6, 0.4, 0.26),
-    ("2_2_5.csv", 0.6, 0.4, 0.28),
-    ("2_2_6.csv", 0.6, 0.4, 0.30),
-    ("2_2_7.csv", 0.8, 0.2, 0.20),
-    ("2_2_8.csv", 0.8, 0.2, 0.22),
-    ("2_2_9.csv", 0.8, 0.2, 0.24),
-    ("2_2_10.csv", 1.0, 0.0, 0.16),
-)
-AMOUNT_MULTIPLIER = 0.8
-DEFAULT_OUTPUT_DIRECTORY = Path(__file__).resolve().parents[1] / "data"
+def load_selection():
+    selection = json.loads((CONFIG_DIRECTORY / 'selection.json').read_text(encoding='utf-8'))
+    names = [entry['name'] for entry in selection['submissions']]
+    if names != [f'2_2_{index}' for index in range(1, 11)]:
+        raise ValueError('Expected the ten selected submissions in screenshot order.')
+    return selection
 
 
-def parse_args(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIRECTORY)
-    parser.add_argument("--seed", type=int, default=RANDOM_SEED)
-    return parser.parse_args(argv)
+def load_configuration(name, seed):
+    config = json.loads((CONFIG_DIRECTORY / f'{name}.json').read_text(encoding='utf-8'))
+    config['random_seed'] = seed
+    if config['classifier']['family'] != 'checkpoint_blend':
+        validate_dashboard_config(config)
+        return config
+    classifier = config['classifier']
+    weights = np.asarray(classifier['weights'], dtype=float)
+    if weights.shape != (2,) or not np.isfinite(weights).all() or (weights < 0).any() or not np.isclose(weights.sum(), 1):
+        raise ValueError('Blend weights must be two nonnegative numbers summing to one.')
+    if config['severity_method'] != 'blended_weighted_profile' or config['amount_cap'] is not None:
+        raise ValueError('Selected blends use uncapped probability-weighted primary profile amounts.')
+    for component in ['primary', 'secondary']:
+        validate_dashboard_config(dict(config, classifier=classifier[component], severity_method='profile_median'))
+    return config
 
 
-def fit_models(train_features, claim_amounts, seed):
-    primary = DashboardClaimModel(PRIMARY_SETTINGS, random_seed=seed).fit(
-        train_features, claim_amounts.to_numpy(),
-    )
-    secondary = DashboardClaimModel(SECONDARY_SETTINGS, random_seed=seed).fit(
-        train_features, claim_amounts.to_numpy(),
-    )
-    return primary, secondary
+def fitted_models(config, features, amounts, cache):
+    classifier = config['classifier']
+    settings_list = ([classifier['primary'], classifier['secondary']]
+                     if classifier['family'] == 'checkpoint_blend' else [classifier])
+    models = []
+    for settings in settings_list:
+        key = json.dumps(dict(settings={key: value for key, value in settings.items() if key != 'name'},
+                              alpha=config['ridge_alpha'], seed=config['random_seed']), sort_keys=True)
+        if key not in cache:
+            cache[key] = DashboardClaimModel(settings, ridge_alpha=config['ridge_alpha'],
+                                             random_seed=config['random_seed']).fit(features, amounts)
+        models.append(cache[key])
+    return models
 
 
-def profile_amount(primary_model, test_features):
-    ridge_amount = np.maximum(primary_model.regressor_.predict(test_features), 0.0)
-    return primary_model.history_.predict_amount(test_features, ridge_amount)
+def profile_amount(primary_model, features):
+    ridge_amount = np.maximum(primary_model.regressor_.predict(features), 0.0)
+    return primary_model.history_.predict_amount(features, ridge_amount)
 
 
-def write_candidates(output_directory, seed):
-    training_data = load_training_data()
-    test_data = load_test_data()
-    primary, secondary = fit_models(
-        training_data[ALL_FEATURE_COLUMNS], training_data[TARGET_COLUMN], seed,
-    )
-    test_features = test_data[ALL_FEATURE_COLUMNS]
-    first_probability = primary.predict_claim_probability(test_features)
-    second_probability = secondary.predict_claim_probability(test_features)
-    amount = profile_amount(primary, test_features) * AMOUNT_MULTIPLIER
+def predict_configuration(config, models, features):
+    if config['classifier']['family'] == 'checkpoint_blend':
+        first, second = models
+        weights = config['classifier']['weights']
+        probability = (weights[0] * first.predict_claim_probability(features)
+                       + weights[1] * second.predict_claim_probability(features))
+        amount = profile_amount(first, features)
+        return np.where(probability >= config['threshold'],
+                        probability * amount * config['severity_scale'], 0.)
+    model = models[0]
+    # Fits can be reused, but the final threshold and amount policy belong to each submission.
+    model.set_params(claim_probability_threshold=config['threshold'], severity_method=config['severity_method'],
+                     severity_scale=config['severity_scale'], amount_cap=config['amount_cap'])
+    return model.predict(features)
 
-    for filename, first_weight, second_weight, threshold in CANDIDATES:
-        probability = first_weight * first_probability + second_weight * second_probability
-        prediction = np.where(probability >= threshold, probability * amount, 0.0)
-        output_path = output_directory / filename
-        pd.DataFrame({
-            ROW_INDEX_COLUMN: test_data[ROW_INDEX_COLUMN],
-            TARGET_COLUMN: prediction,
-        }).to_csv(output_path, index=False)
-        print(f"{filename}: nonzero predictions = {(prediction > 0).sum()}")
+
+def software_versions():
+    versions = {'python': platform.python_version()}
+    for package in ['numpy', 'pandas', 'scikit-learn', 'lightgbm']:
+        try:
+            versions[package] = version(package)
+        except PackageNotFoundError:
+            continue
+    return versions
+
+
+def write_submission(entry, config, models, training, test, output_directory, data_hash):
+    actual = training[TARGET_COLUMN].to_numpy()
+    training_prediction = predict_configuration(config, models, training[ALL_FEATURE_COLUMNS])
+    prediction = predict_configuration(config, models, test[ALL_FEATURE_COLUMNS])
+    for values in [training_prediction, prediction]:
+        if not np.isfinite(values).all() or (values < 0).any():
+            raise ValueError(f'{entry["name"]}: predictions must be finite and nonnegative.')
+    metrics = dict(name=entry['name'], previous_name=entry['previous_name'], training_seed=config['random_seed'],
+                   training_rows=len(training), training_claims=int((actual > 0).sum()),
+                   training_mae=float(np.abs(actual - training_prediction).mean()),
+                   training_zero_mae=float(np.abs(actual).mean()), test_rows=len(test),
+                   nonzero_predictions=int((prediction > 0).sum()), training_data_sha256=data_hash,
+                   configuration_sha256=hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest(),
+                   software_versions=software_versions(),
+                   interpretation='In-sample MAE after fitting all rows; profile history includes those rows.')
+    pd.DataFrame({ROW_INDEX_COLUMN: test[ROW_INDEX_COLUMN], TARGET_COLUMN: prediction}).to_csv(
+        output_directory / f'{entry["name"]}.csv', index=False)
+    (output_directory / f'{entry["name"]}.metrics.json').write_text(json.dumps(metrics, indent=2) + '\n', encoding='utf-8')
+    print(f'{entry["name"]}: training MAE={metrics["training_mae"]:.4f}; '
+          f'nonzero predictions={metrics["nonzero_predictions"]}/{len(test)}', flush=True)
+
+
+def write_upload_comments(output_directory, entries):
+    lines = ['Checkpoint 2 / Group 2 - copy the matching training MAE into each CSV upload comment.', '']
+    for entry in entries:
+        path = output_directory / f'{entry["name"]}.metrics.json'
+        if not path.exists() or not (output_directory / f'{entry["name"]}.csv').exists():
+            continue
+        metrics = json.loads(path.read_text(encoding='utf-8'))
+        if metrics['previous_name'] != entry['previous_name']:
+            continue
+        lines.append(f'{entry["name"]}.csv: Training MAE (all {metrics["training_rows"]:,} training rows, '
+                     f'seed {metrics["training_seed"]}) = {metrics["training_mae"]:.6f}.')
+    (output_directory / 'checkpoint2_upload_comments.txt').write_text('\n'.join(lines) + '\n', encoding='utf-8')
 
 
 def main(argv=None):
-    args = parse_args(argv)
-    write_candidates(args.output_dir, args.seed)
+    selection = load_selection()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--submission', choices=[entry['name'] for entry in selection['submissions']])
+    parser.add_argument('--output-dir', type=Path, default=DEFAULT_OUTPUT_DIRECTORY)
+    parser.add_argument('--seed', type=int, default=RANDOM_SEED)
+    args = parser.parse_args(argv)
+    if not 0 <= args.seed <= MAX_RANDOM_SEED:
+        parser.error('Seed is outside the supported range.')
+    training_path = ROOT / 'data' / DEFAULT_TRAINING_PATH.name
+    test_path = ROOT / 'data' / DEFAULT_TEST_PATH.name
+    data_hash = hashlib.sha256(training_path.read_bytes()).hexdigest()
+    if data_hash != selection['training_data_sha256']:
+        raise ValueError('Training data differs from the frozen selection; review the configuration evidence first.')
+    training, test = load_training_data(training_path), load_test_data(test_path)
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    cache = {}
+    entries = [entry for entry in selection['submissions'] if not args.submission or entry['name'] == args.submission]
+    for entry in entries:
+        config = load_configuration(entry['name'], args.seed)
+        models = fitted_models(config, training[ALL_FEATURE_COLUMNS], training[TARGET_COLUMN].to_numpy(), cache)
+        write_submission(entry, config, models, training, test, args.output_dir, data_hash)
+    write_upload_comments(args.output_dir, selection['submissions'])
+    print(f'Wrote {len(entries)} selected submissions and training metrics to {args.output_dir}.', flush=True)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
