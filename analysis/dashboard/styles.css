@@ -31,10 +31,15 @@ select{margin-top:5px;width:100%}.select-field{padding-top:1px}.select-field>lab
 .checkbox{display:flex;gap:8px;align-items:center;color:var(--muted)}.checkbox input{width:16px;height:16px;margin:0;accent-color:var(--blue)}.checkbox.disabled{opacity:.55}
 .secondary{background:#f6f8fc;color:#36506e;border-color:var(--line);font-size:12px;padding:7px 11px}
 .error{color:#a02727;margin:12px 0 0}
+.storage-notice{color:var(--muted);font-size:12px;margin:12px 0 0}
+.favourite-cell{text-align:center;padding:0 8px}
+.favourite-button{font-size:23px;line-height:1;padding:6px 8px;color:#64748b}
+.favourite-button[aria-pressed=true]{color:#946200;background:#fff5d6;border-color:#e5c46a}
 .results-toolbar{display:flex;justify-content:space-between;align-items:center;gap:20px;padding:20px 22px 8px}.results-toolbar p{margin:5px 0 0;font-size:12px;color:var(--muted)}
 .configuration-choice{display:flex;align-items:center;gap:12px;white-space:nowrap}.configuration-choice select{width:220px;margin:0}
 .table-note{margin:6px 22px 16px;font-size:12px;color:var(--muted)}
 .table-scroll{overflow:auto;max-height:620px;min-height:260px}
+.detail-panel .table-scroll{min-height:0;max-height:260px}
 table{width:100%;border-collapse:separate;border-spacing:0;font-variant-numeric:tabular-nums;white-space:nowrap}
 thead{position:sticky;top:0;z-index:2}th{background:#f6f8fb;text-align:right;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:0 12px;height:44px;font-size:12px;color:#48576b}
 th:first-child,td:first-child{text-align:left;padding-left:22px}th:last-child,td:last-child{text-align:right;padding-right:22px}
@@ -44,6 +49,9 @@ th span{font-size:10px;margin-left:3px}
 td{text-align:right;padding:11px 12px;border-bottom:1px solid #edf0f4;font-size:13px}
 tbody tr:hover{background:#f6f9fe}tbody tr:last-child td{border-bottom:0}
 td:first-child{font-weight:650;color:#233d67}.score{font-weight:650}.metric-primary{color:#255ac8}.missing{color:#8994a3}
+#runTable .favourite-cell{text-align:center;padding:8px}
+#runTable th:nth-child(2){text-align:left}
+.run-label{font-weight:650;color:#233d67;text-align:left}
 .availability{display:block;font-size:11px;color:#7c8796;white-space:normal;max-width:155px;margin-top:3px;line-height:1.3;text-align:left}
 .view-button{font-size:12px;color:var(--blue);padding:5px 9px;border-color:#dbe4f3}
 .empty{text-align:center!important;padding:50px 20px!important;color:var(--muted)}

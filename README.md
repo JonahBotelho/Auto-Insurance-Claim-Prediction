@@ -6,6 +6,10 @@ vehicle features. `rowIndex` identifies rows and is excluded from model inputs.
 Input datasets and the submission template are in `data/`:
 `trainingset.csv`, `testset.csv`, and `submission.csv`.
 
+Our three evaluation priorities are **MAE** (mean absolute prediction error;
+lower is better), **precision** (actual claims among predicted claims), and
+**recall** (detected claims among all actual claims). A claim is `ClaimAmount > 0`.
+
 ## Training and prediction
 
 Use Python 3.10 or newer and run commands from the repository folder:
@@ -123,6 +127,60 @@ Install the analysis dependencies separately:
 ```powershell
 python -m pip install -r analysis/requirements.txt
 ```
+
+### Model dashboard
+
+Open `dashboard/index.html` for historical runs, both seed searches, fresh
+historical evaluations, and all ten checkpoint 2 submissions.
+Matching operating points average unique seeds; source,
+seed and coverage filters control comparisons. Mean MAE, matched all-zero mean
+MAE, absolute/percentage improvement, precision, recall, mean F1 and aggregate are shown.
+Mean F1 averages each seed's claim-detection F1 (0–1; higher is better),
+with zero when precision and recall are both zero. It is sortable and included in exports.
+Checkpoint 2 retains its five documented 25% holdouts (seeds 42–46).
+Star rows to favourite their exact configuration and seed cohort; **Favourites only**
+shows saved rows alongside the other filters. Bookmarks persist in browser local
+storage for the same page/browser; if storage is blocked, they last for the session.
+Clearing filters keeps bookmarks. Multiple operating points can be bookmarked per model.
+
+Rebuild with `python -m analysis.build_dashboard`. Original payloads and SHA-256
+checksums are preserved in `analysis/output/dashboard_sources/`; source downloads
+and per-seed observations are available in the page. Predictions and full saved
+score grids remain under `analysis/output/`. Fresh historical results use current
+code and seeds 41–43, rather than recreating discarded historical measurements.
+Run `python -m analysis.recover_dashboard_results` or
+`python -m analysis.evaluate_checkpoint2` to refresh those evaluations, then rebuild.
+These are exploratory holdout results, not test-set accuracy. Application models
+and submission CSVs are not replaced by dashboard evaluation or rebuilding.
+
+The five-seed rerun freezes 300 distinct configurations: 100 lowest three-seed
+MAE, then 100 highest recall and 100 highest precision, filling overlaps with
+unused leaders. It keeps their settings and holdouts and evaluates seeds 41–45:
+
+```powershell
+python -m analysis.five_seed_selection
+python -m analysis.five_seed_rerun --workers 4
+python -m analysis.five_seed_report
+```
+
+Selection, five-seed results, original comparisons, per-seed CSVs and reproduction
+configs are in `analysis/output/five_seed_rerun/`. Select its source in the
+dashboard to see all 300 fixed operating points. Existing results are retained.
+
+The **Tuned 500 — five-seed search** source adds 500 distinct configurations on
+seeds 41–45, with 20–50% evaluation. It tunes MAE, all-zero improvement, precision,
+recall and mean F1, preferring mean precision ≥45% and recall ≥30%; every run is kept.
+Use **Apply detection targets** to filter to those precision and recall floors.
+Run `.venv/Scripts/python -m analysis.tuned_five_seed_search --workers 4`, then
+`python -m analysis.tuned_search_report` and `python -m analysis.build_dashboard`.
+The virtual environment needs `src/optional_requirements.txt`. Predictions, full
+score grids, CSVs and configs are in `analysis/output/tuned_five_seed_search/`.
+These five holdouts also select operating points, so their scores are exploratory.
+
+The **Historical 95/5** source retains the saved three-seed MAE of 78.5253 and
+the same fixed settings evaluated on seeds 41–45. Rebuild that comparison with
+`python -m analysis.low_holdout_report`; its small holdout is historical and
+does not change the 20% minimum for new searches.
 
 ### Basic linear regression
 
