@@ -5,7 +5,6 @@ __pycache__
 models
 
 # Generated submission metadata and temporary build artifacts.
-/data/2_2_*.metrics.json
 /data/checkpoint2_upload_comments.txt
 /tmp/
 
@@ -13,5 +12,4 @@ claimproj/data/
 claimproj/catboost_info/
 claimproj/results/*.npy
 *.joblib
-*.csv
 !claimproj/results/cv_summary.csv

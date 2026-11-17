@@ -21,7 +21,7 @@ from src.feature_schema import ALL_FEATURE_COLUMNS, MAX_RANDOM_SEED, RANDOM_SEED
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG_DIRECTORY = ROOT / 'configs/checkpoint2'
-DEFAULT_OUTPUT_DIRECTORY = ROOT / 'data'
+DEFAULT_OUTPUT_DIRECTORY = ROOT / 'data/checkpoint2'
 
 
 def load_selection():
@@ -95,7 +95,7 @@ def software_versions():
     return versions
 
 
-def write_submission(entry, config, models, training, test, output_directory, data_hash):
+def write_submission(entry, config, models, training, test, output_directory, data_hash, metrics_directory=None):
     actual = training[TARGET_COLUMN].to_numpy()
     training_prediction = predict_configuration(config, models, training[ALL_FEATURE_COLUMNS])
     prediction = predict_configuration(config, models, test[ALL_FEATURE_COLUMNS])
@@ -112,15 +112,18 @@ def write_submission(entry, config, models, training, test, output_directory, da
                    interpretation='In-sample MAE after fitting all rows; profile history includes those rows.')
     pd.DataFrame({ROW_INDEX_COLUMN: test[ROW_INDEX_COLUMN], TARGET_COLUMN: prediction}).to_csv(
         output_directory / f'{entry["name"]}.csv', index=False)
-    (output_directory / f'{entry["name"]}.metrics.json').write_text(json.dumps(metrics, indent=2) + '\n', encoding='utf-8')
+    metadata_directory = metrics_directory if metrics_directory is not None else output_directory
+    (metadata_directory / f'{entry["name"]}.metrics.json').write_text(json.dumps(metrics, indent=2) + '\n', encoding='utf-8')
     print(f'{entry["name"]}: training MAE={metrics["training_mae"]:.4f}; '
           f'nonzero predictions={metrics["nonzero_predictions"]}/{len(test)}', flush=True)
 
 
-def write_upload_comments(output_directory, entries):
+def write_upload_comments(output_directory, entries, metrics_directory=None, comments_directory=None):
+    metadata_directory = metrics_directory if metrics_directory is not None else output_directory
+    destination = comments_directory if comments_directory is not None else output_directory
     lines = ['Checkpoint 2 / Group 2 - copy the matching training MAE into each CSV upload comment.', '']
     for entry in entries:
-        path = output_directory / f'{entry["name"]}.metrics.json'
+        path = metadata_directory / f'{entry["name"]}.metrics.json'
         if not path.exists() or not (output_directory / f'{entry["name"]}.csv').exists():
             continue
         metrics = json.loads(path.read_text(encoding='utf-8'))
@@ -128,14 +131,15 @@ def write_upload_comments(output_directory, entries):
             continue
         lines.append(f'{entry["name"]}.csv: Training MAE (all {metrics["training_rows"]:,} training rows, '
                      f'seed {metrics["training_seed"]}) = {metrics["training_mae"]:.6f}.')
-    (output_directory / 'checkpoint2_upload_comments.txt').write_text('\n'.join(lines) + '\n', encoding='utf-8')
+    (destination / 'checkpoint2_upload_comments.txt').write_text('\n'.join(lines) + '\n', encoding='utf-8')
 
 
 def main(argv=None):
     selection = load_selection()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--submission', choices=[entry['name'] for entry in selection['submissions']])
-    parser.add_argument('--output-dir', type=Path, default=DEFAULT_OUTPUT_DIRECTORY)
+    parser.add_argument('--output-dir', type=Path, default=DEFAULT_OUTPUT_DIRECTORY,
+                        help='CSV destination; a custom folder also receives its training metrics and upload comments.')
     parser.add_argument('--seed', type=int, default=RANDOM_SEED)
     args = parser.parse_args(argv)
     if not 0 <= args.seed <= MAX_RANDOM_SEED:
@@ -147,13 +151,18 @@ def main(argv=None):
         raise ValueError('Training data differs from the frozen selection; review the configuration evidence first.')
     training, test = load_training_data(training_path), load_test_data(test_path)
     args.output_dir.mkdir(parents=True, exist_ok=True)
+    # Keep the repository's organised layout; custom destinations remain self-contained.
+    default_destination = args.output_dir.resolve() == DEFAULT_OUTPUT_DIRECTORY.resolve()
+    metrics_directory = ROOT / 'data/checkpoint2 metrics' if default_destination else args.output_dir
+    comments_directory = ROOT / 'data' if default_destination else args.output_dir
+    metrics_directory.mkdir(parents=True, exist_ok=True)
     cache = {}
     entries = [entry for entry in selection['submissions'] if not args.submission or entry['name'] == args.submission]
     for entry in entries:
         config = load_configuration(entry['name'], args.seed)
         models = fitted_models(config, training[ALL_FEATURE_COLUMNS], training[TARGET_COLUMN].to_numpy(), cache)
-        write_submission(entry, config, models, training, test, args.output_dir, data_hash)
-    write_upload_comments(args.output_dir, selection['submissions'])
+        write_submission(entry, config, models, training, test, args.output_dir, data_hash, metrics_directory)
+    write_upload_comments(args.output_dir, selection['submissions'], metrics_directory, comments_directory)
     print(f'Wrote {len(entries)} selected submissions and training metrics to {args.output_dir}.', flush=True)
 
 

@@ -114,15 +114,16 @@ training data; test-set accuracy is unknown without its claim labels.
 See `submission.md` for both checkpoint selections and their recorded scores.
 Checkpoint 1 submissions 1-6 use `src/`; submissions 7-10 use the separate LightGBM/CatBoost
 workflow documented in `claimproj/README.md`. Its generator writes only files
-7-10 to `data/regenerated/`, leaving the submitted CSVs in `data/` intact.
+7-10 to `data/regenerated/`, leaving the submitted CSVs in `data/checkpoint1/` intact.
 
 The current checkpoint 2 selection is in `submission.md`, with frozen settings in
 `configs/checkpoint2/`. Install `src/requirements.txt`, then run
 `python -m src.generate_checkpoint2_candidates` to write `2_2_1.csv` through
-`2_2_10.csv`, training metrics and `checkpoint2_upload_comments.txt` directly to `data/`.
+`2_2_10.csv` to `data/checkpoint2/`, training metrics to `data/checkpoint2 metrics/`,
+and `checkpoint2_upload_comments.txt` to `data/`.
 Use `--submission 2_2_1` for one file. Historical blend evaluations remain available
 through `python -m analysis.evaluate_checkpoint2`.
-The generator replaces the current `data/2_2_*.csv` files when rerun. Keep source,
+The generator replaces the current `data/checkpoint2/2_2_*.csv` files when rerun. Keep source,
 configs and documentation in the repository; package the source manually when submitting.
 
 ## Analysis

@@ -45,7 +45,7 @@ function reproductionPlan(row) {
     return {mode:"analysis",badge:"Checkpoint 2",prompts:[],
       command:"python -m analysis.evaluate_checkpoint2 --submission "+row.settings.submission+" --seeds "+seed,
       note:"This evaluates the original checkpoint blend shown in this historical row on one 25% holdout without replacing application models or submission files.",
-      footnote:"The current ten-file selection is documented in submission.md. Generate it with python -m src.generate_checkpoint2_candidates --seed 42; files are written directly to data/."};
+      footnote:"The current ten-file selection is documented in submission.md. Generate it with python -m src.generate_checkpoint2_candidates --seed 42; CSVs are written to data/checkpoint2/ and metrics to data/checkpoint2 metrics/."};
   }
   const filename = "settings-" + row.fit_id + "-seed-" + (row.reproduction_seed ?? row.seed ?? 42) + ".json";
   return {mode:"training",badge:"Training CLI",filename,prompts:trainingPromptValues(row),

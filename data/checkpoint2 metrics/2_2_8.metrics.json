@@ -1,0 +1,21 @@
+{
+  "name": "2_2_8",
+  "previous_name": "2_2_5",
+  "training_seed": 42,
+  "training_rows": 70000,
+  "training_claims": 3335,
+  "training_mae": 91.68811399233927,
+  "training_zero_mae": 103.05090362934268,
+  "test_rows": 30000,
+  "nonzero_predictions": 1749,
+  "training_data_sha256": "32cb5167e2321863f3044bb8240eb58f190f2e1a0729c0d412e3aa2772946e61",
+  "configuration_sha256": "a188c4be60577a2ec8df6d12157c2c716a102fb8ed9a9ed0609299436d665741",
+  "software_versions": {
+    "python": "3.12.10",
+    "numpy": "2.4.2",
+    "pandas": "3.0.1",
+    "scikit-learn": "1.9.1",
+    "lightgbm": "4.7.0"
+  },
+  "interpretation": "In-sample MAE after fitting all rows; profile history includes those rows."
+}
