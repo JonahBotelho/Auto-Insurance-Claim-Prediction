@@ -29,7 +29,7 @@ python -m claimproj.gen_submissions
 It writes only files 7-10 and their full-training MAE to `data/regenerated/`.
 See `claimproj/README.md` for exact settings and metric definitions. Generated
 outputs may differ with dependency versions; original submitted files remain
-in `data/`. The original trained models for files 2-10 were not retained.
+in `data/checkpoint1/`. The original trained models for files 2-10 were not retained.
 
 The included saved Decision Tree can generate file 1 without retraining:
 `python -m src.predict --output data/regenerated_1_2_1.csv`.
@@ -149,3 +149,120 @@ scikit-learn 1.9.1, pandas 3.0.1, and NumPy 2.4.2.
 - CV MAE: 102.47
 - Training MAE (full training set): 94.2232
 - Holdout MAE: 103.32
+
+## Checkpoint 2 submissions
+
+Install dependencies and generate all ten files from the repository root:
+
+```powershell
+python -m pip install -r src/requirements.txt
+python -m src.generate_checkpoint2_candidates --seed 42
+```
+
+Use `--submission 2_2_9` to generate one file. CSVs go to `data/checkpoint2/`,
+training metrics to `data/checkpoint2 metrics/`, and upload comments to
+`data/checkpoint2_upload_comments.txt`. A custom `--output-dir "path with spaces"`
+receives its CSVs, metrics and comments together. Existing destination files are replaced.
+
+To run submission 1 on another CSV, use its full file path (including the filename):
+
+```powershell
+python -m src.generate_checkpoint2_candidates --submission 2_2_1 --seed 42 --input "C:\path to data\new_testset.csv" --output-dir "C:\path to results"
+```
+
+The new CSV needs `rowIndex` and the same 18 feature columns as `data/testset.csv`;
+claim labels are unnecessary. Training continues to use `data/trainingset.csv`.
+
+All final models use the full **70,000 training rows (3,335 positive claims)** and
+seed **42**. Training MAE is in-sample; it does not estimate test-set accuracy.
+Validation means below use five seeds and the evaluation splits shown.
+Improvement averages each seed's percentage MAE reduction against all-zero predictions.
+
+| Submission | Eval % | Seeds | Mean MAE | All-zero MAE | MAE reduction | Improvement | Precision | Recall | Mean F1 | Aggregate | Threshold |
+|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 2_2_1 | 5% | 41–45 | 84.1730 | 91.7301 | 7.5572 | 7.96% | 51.48% | 28.86% | 0.3687 | 22.7866 | 0.470 |
+| 2_2_2 | 28% | 41–45 | 97.1558 | 100.3546 | 3.1987 | 3.22% | 54.81% | 34.28% | 0.4215 | 18.2315 | 0.420 |
+| 2_2_3 | 25% | 41–45 | 97.7759 | 101.5314 | 3.7555 | 3.72% | 54.94% | 33.02% | 0.4123 | 18.9064 | 0.440 |
+| 2_2_4 | 25% | 41–45 | 98.8756 | 101.5314 | 2.6557 | 2.62% | 45.10% | 54.03% | 0.4915 | 18.5607 | 0.125 |
+| 2_2_5 | 20% | 41–45 | 99.6769 | 102.5418 | 2.8648 | 2.74% | 50.00% | 43.96% | 0.4678 | 18.1863 | 0.340 |
+| 2_2_6 | 20% | 41–45 | 100.0412 | 102.5418 | 2.5005 | 2.39% | 45.42% | 54.81% | 0.4968 | 18.1292 | 0.190 |
+| 2_2_7 | 25% | 42–46 | 100.3675 | 104.0996 | 3.7321 | 3.55% | 49.60% | 38.56% | 0.4338 | 18.9425 | 0.340 |
+| 2_2_8 | 25% | 42–46 | 100.6874 | 104.0996 | 3.4122 | 3.25% | 46.68% | 47.72% | 0.4717 | 19.3554 | 0.280 |
+| 2_2_9 | 25% | 42–46 | 100.7687 | 104.0996 | 3.3309 | 3.18% | 45.97% | 51.70% | 0.4866 | 19.6294 | 0.220 |
+| 2_2_10 | 25% | 42–46 | 100.9740 | 104.0996 | 3.1256 | 2.99% | 45.67% | 53.02% | 0.4906 | 19.3410 | 0.160 |
+
+The screenshot shows 0.200 for the former `2_2_8`; the saved configuration and
+pictured scores correspond to **0.220**, retained here as confirmed. The final
+row shows 0.240, but its pictured scores reproduce at the recorded **0.160**;
+0.240 gives different scores. This selection preserves the pictured scores
+and recorded 0.160 configuration for `2_2_10`.
+
+### 2_2_1
+
+- Previous name: Historical 95/5 — 3 seeds, Historical 95/5 — 5 seeds
+- Exact model settings: `configs/checkpoint2/2_2_1.json`.
+- Training data: all 70,000 rows (3,335 positive claims); seed 42; training MAE **103.110913**.
+- Per validation seed: 66,500 training rows / 3,500 held-out rows.
+
+### 2_2_2
+
+- Previous name: Tuned R11
+- Exact model settings: `configs/checkpoint2/2_2_2.json`.
+- Training data: all 70,000 rows (3,335 positive claims); seed 42; training MAE **94.951417**.
+- Per validation seed: 50,399 training rows / 19,601 held-out rows.
+
+### 2_2_3
+
+- Previous name: Tuned R192
+- Exact model settings: `configs/checkpoint2/2_2_3.json`.
+- Training data: all 70,000 rows (3,335 positive claims); seed 42; training MAE **95.786657**.
+- Per validation seed: 52,500 training rows / 17,500 held-out rows.
+
+### 2_2_4
+
+- Previous name: Tuned R314
+- Exact model settings: `configs/checkpoint2/2_2_4.json`.
+- Training data: all 70,000 rows (3,335 positive claims); seed 42; training MAE **92.671840**.
+- Per validation seed: 52,500 training rows / 17,500 held-out rows.
+
+### 2_2_5
+
+- Previous name: Tuned R142
+- Exact model settings: `configs/checkpoint2/2_2_5.json`.
+- Training data: all 70,000 rows (3,335 positive claims); seed 42; training MAE **93.201715**.
+- Per validation seed: 56,000 training rows / 14,000 held-out rows.
+
+### 2_2_6
+
+- Previous name: Tuned R345
+- Exact model settings: `configs/checkpoint2/2_2_6.json`.
+- Training data: all 70,000 rows (3,335 positive claims); seed 42; training MAE **92.790901**.
+- Per validation seed: 56,000 training rows / 14,000 held-out rows.
+
+### 2_2_7
+
+- Previous name: 2_2_2
+- Exact model settings: `configs/checkpoint2/2_2_7.json`.
+- Training data: all 70,000 rows (3,335 positive claims); seed 42; training MAE **92.344242**.
+- Per validation seed: 52,500 training rows / 17,500 held-out rows.
+
+### 2_2_8
+
+- Previous name: 2_2_5
+- Exact model settings: `configs/checkpoint2/2_2_8.json`.
+- Training data: all 70,000 rows (3,335 positive claims); seed 42; training MAE **91.688114**.
+- Per validation seed: 52,500 training rows / 17,500 held-out rows.
+
+### 2_2_9
+
+- Previous name: 2_2_8
+- Exact model settings: `configs/checkpoint2/2_2_9.json`.
+- Training data: all 70,000 rows (3,335 positive claims); seed 42; training MAE **91.556272**.
+- Per validation seed: 52,500 training rows / 17,500 held-out rows.
+
+### 2_2_10
+
+- Previous name: 2_2_10
+- Exact model settings: `configs/checkpoint2/2_2_10.json`.
+- Training data: all 70,000 rows (3,335 positive claims); seed 42; training MAE **91.589141**.
+- Per validation seed: 52,500 training rows / 17,500 held-out rows.

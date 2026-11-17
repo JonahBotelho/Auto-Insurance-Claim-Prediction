@@ -1,0 +1,21 @@
+{
+  "name": "2_2_2",
+  "previous_name": "Tuned R11",
+  "training_seed": 42,
+  "training_rows": 70000,
+  "training_claims": 3335,
+  "training_mae": 94.95141659602493,
+  "training_zero_mae": 103.05090362934268,
+  "test_rows": 30000,
+  "nonzero_predictions": 1115,
+  "training_data_sha256": "32cb5167e2321863f3044bb8240eb58f190f2e1a0729c0d412e3aa2772946e61",
+  "configuration_sha256": "908ee1bc2daf5678b878771bf9077f8bbfe82c09f666ce6ec3a5c6d321865ee9",
+  "software_versions": {
+    "python": "3.12.10",
+    "numpy": "2.4.2",
+    "pandas": "3.0.1",
+    "scikit-learn": "1.9.1",
+    "lightgbm": "4.7.0"
+  },
+  "interpretation": "In-sample MAE after fitting all rows; profile history includes those rows."
+}

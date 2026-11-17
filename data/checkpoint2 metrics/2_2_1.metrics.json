@@ -1,0 +1,21 @@
+{
+  "name": "2_2_1",
+  "previous_name": "Historical 95/5 \u2014 3 seeds, Historical 95/5 \u2014 5 seeds",
+  "training_seed": 42,
+  "training_rows": 70000,
+  "training_claims": 3335,
+  "training_mae": 103.11091299336746,
+  "training_zero_mae": 103.05090362934268,
+  "test_rows": 30000,
+  "nonzero_predictions": 839,
+  "training_data_sha256": "32cb5167e2321863f3044bb8240eb58f190f2e1a0729c0d412e3aa2772946e61",
+  "configuration_sha256": "ccaf37eacff76211bc36a422f44483231f0e439d320abb42c5995369b1d0115d",
+  "software_versions": {
+    "python": "3.12.10",
+    "numpy": "2.4.2",
+    "pandas": "3.0.1",
+    "scikit-learn": "1.9.1",
+    "lightgbm": "4.7.0"
+  },
+  "interpretation": "In-sample MAE after fitting all rows; profile history includes those rows."
+}

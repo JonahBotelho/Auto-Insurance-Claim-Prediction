@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "classifier": {
+    "name": "Historical minimum MAE - 5% holdout, seed 41",
+    "family": "hist",
+    "iterations": 250,
+    "rate": 0.07,
+    "leaves": 11,
+    "leaf": 200,
+    "l2": 50.0,
+    "oversampling": 45,
+    "smoothing": 1.0,
+    "early_stopping": true,
+    "amount_history": false
+  },
+  "threshold": 0.47,
+  "evaluation_percent": 5,
+  "random_seed": 42,
+  "severity_method": "profile_median",
+  "ridge_alpha": 0.01,
+  "severity_scale": 0.9,
+  "amount_cap": 10000,
+  "n_splits": 5
+}

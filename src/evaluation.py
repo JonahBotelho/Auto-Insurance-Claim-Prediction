@@ -14,11 +14,12 @@ from src.feature_schema import DEFAULT_CV_FOLDS, DEFAULT_EVALUATION_PERCENT, RAN
 
 
 def stratified_train_validation_split(
-    X: pd.DataFrame, y: pd.Series, test_size: float = DEFAULT_EVALUATION_PERCENT / 100
+    X: pd.DataFrame, y: pd.Series, test_size: float = DEFAULT_EVALUATION_PERCENT / 100,
+    random_seed: int = RANDOM_SEED,
 ):
     has_claim = (y > 0).astype(int)
     return train_test_split(
-        X, y, test_size=test_size, stratify=has_claim, random_state=RANDOM_SEED
+        X, y, test_size=test_size, stratify=has_claim, random_state=random_seed
     )
 
 
@@ -34,10 +35,11 @@ def validate_evaluation_partitions(y_train, y_val, n_splits):
 
 
 def cross_validate_mae(
-    model, X: pd.DataFrame, y: pd.Series, n_splits: int = DEFAULT_CV_FOLDS
+    model, X: pd.DataFrame, y: pd.Series, n_splits: int = DEFAULT_CV_FOLDS,
+    random_seed: int = RANDOM_SEED,
 ) -> np.ndarray:
     has_claim = (y > 0).astype(int)
-    folds = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=RANDOM_SEED)
+    folds = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=random_seed)
     scores = cross_val_score(
         model, X, y, cv=folds.split(X, has_claim), scoring="neg_mean_absolute_error",
         error_score="raise",

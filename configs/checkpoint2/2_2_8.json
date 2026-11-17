@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "classifier": {
+    "family": "checkpoint_blend",
+    "primary": {
+      "family": "hist",
+      "iterations": 125,
+      "rate": 0.15,
+      "leaves": 9,
+      "leaf": 50,
+      "l2": 5.0,
+      "oversampling": 30,
+      "smoothing": 0.25,
+      "early_stopping": "auto"
+    },
+    "secondary": {
+      "family": "hist",
+      "iterations": 250,
+      "rate": 0.1,
+      "leaves": 15,
+      "leaf": 75,
+      "l2": 10.0,
+      "oversampling": 55,
+      "smoothing": 0.5,
+      "early_stopping": "auto",
+      "amount_history": true
+    },
+    "weights": [
+      0.6,
+      0.4
+    ],
+    "submission": "2_2_5"
+  },
+  "threshold": 0.28,
+  "evaluation_percent": 25,
+  "random_seed": 42,
+  "severity_method": "blended_weighted_profile",
+  "ridge_alpha": 0.01,
+  "severity_scale": 0.8,
+  "amount_cap": null,
+  "n_splits": 5
+}

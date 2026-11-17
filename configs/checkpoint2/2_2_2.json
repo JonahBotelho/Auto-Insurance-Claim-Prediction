@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "classifier": {
+    "family": "lgbm",
+    "iterations": 125,
+    "rate": 0.025,
+    "depth": 5,
+    "l2": 50.0,
+    "oversampling": 0,
+    "smoothing": 5.0,
+    "amount_history": true,
+    "name": "Tuned five-seed 011"
+  },
+  "threshold": 0.42,
+  "evaluation_percent": 28,
+  "random_seed": 42,
+  "severity_method": "mixture_quantile",
+  "ridge_alpha": 10.0,
+  "severity_scale": 1.3,
+  "amount_cap": 1500,
+  "n_splits": 5
+}
