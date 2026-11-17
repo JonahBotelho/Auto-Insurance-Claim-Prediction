@@ -111,6 +111,12 @@ training data; test-set accuracy is unknown without its claim labels.
 
 ## Checkpoint submissions
 
+For checkpoint 2, run `python -m pip install -r src/requirements.txt` then
+`python -m src.generate_checkpoint2_candidates --seed 42` from the extracted
+`sourcecode_2_2.zip` folder. The archive includes source, frozen configs, input
+data and selected submissions. Install dependencies locally; saved model files,
+the historical dashboard and analysis caches are unnecessary for this generator.
+
 See `submission.md` for both checkpoint selections and their recorded scores.
 Checkpoint 1 submissions 1-6 use `src/`; submissions 7-10 use the separate LightGBM/CatBoost
 workflow documented in `claimproj/README.md`. Its generator writes only files
@@ -121,8 +127,16 @@ The current checkpoint 2 selection is in `submission.md`, with frozen settings i
 `python -m src.generate_checkpoint2_candidates` to write `2_2_1.csv` through
 `2_2_10.csv` to `data/checkpoint2/`, training metrics to `data/checkpoint2 metrics/`,
 and `checkpoint2_upload_comments.txt` to `data/`.
-Use `--submission 2_2_1` for one file. Historical blend evaluations remain available
-through `python -m analysis.evaluate_checkpoint2`.
+Use `--submission 2_2_1` for one file. A custom `--output-dir "path with spaces"`
+receives CSVs, metrics and comments together.
+To predict a different CSV, supply its full file path (including the filename):
+
+```powershell
+python -m src.generate_checkpoint2_candidates --submission 2_2_1 --seed 42 --input "C:\path to data\new_testset.csv" --output-dir "C:\path to results"
+```
+
+The input must have `rowIndex` and the same 18 feature columns as `data/testset.csv`;
+claim labels are unnecessary. Training still uses the supplied `data/trainingset.csv`.
 The generator replaces the current `data/checkpoint2/2_2_*.csv` files when rerun. Keep source,
 configs and documentation in the repository; package the source manually when submitting.
 
@@ -151,44 +165,9 @@ shows saved rows alongside the other filters. Bookmarks persist in browser local
 storage for the same page/browser; if storage is blocked, they last for the session.
 Clearing filters keeps bookmarks. Multiple operating points can be bookmarked per model.
 
-Rebuild with `python -m analysis.build_dashboard`. Original payloads and SHA-256
-checksums are preserved in `analysis/output/dashboard_sources/`; source downloads
-and per-seed observations are available in the page. Predictions and full saved
-score grids remain under `analysis/output/`. Fresh historical results use current
-code and seeds 41–43, rather than recreating discarded historical measurements.
-Run `python -m analysis.recover_dashboard_results` or
-`python -m analysis.evaluate_checkpoint2` to refresh those evaluations, then rebuild.
-These are exploratory holdout results, not test-set accuracy. Application models
-and submission CSVs are not replaced by dashboard evaluation or rebuilding.
-
-The five-seed rerun freezes 300 distinct configurations: 100 lowest three-seed
-MAE, then 100 highest recall and 100 highest precision, filling overlaps with
-unused leaders. It keeps their settings and holdouts and evaluates seeds 41–45:
-
-```powershell
-python -m analysis.five_seed_selection
-python -m analysis.five_seed_rerun --workers 4
-python -m analysis.five_seed_report
-```
-
-Selection, five-seed results, original comparisons, per-seed CSVs and reproduction
-configs are in `analysis/output/five_seed_rerun/`. Select its source in the
-dashboard to see all 300 fixed operating points. Existing results are retained.
-
-The **Tuned 500 — five-seed search** source adds 500 distinct configurations on
-seeds 41–45, with 20–50% evaluation. It tunes MAE, all-zero improvement, precision,
-recall and mean F1, preferring mean precision ≥45% and recall ≥30%; every run is kept.
-Use **Apply detection targets** to filter to those precision and recall floors.
-Run `.venv/Scripts/python -m analysis.tuned_five_seed_search --workers 4`, then
-`python -m analysis.tuned_search_report` and `python -m analysis.build_dashboard`.
-The virtual environment needs `src/optional_requirements.txt`. Predictions, full
-score grids, CSVs and configs are in `analysis/output/tuned_five_seed_search/`.
-These five holdouts also select operating points, so their scores are exploratory.
-
-The **Historical 95/5** source retains the saved three-seed MAE of 78.5253 and
-the same fixed settings evaluated on seeds 41–45. Rebuild that comparison with
-`python -m analysis.low_holdout_report`; its small holdout is historical and
-does not change the 20% minimum for new searches.
+The dashboard is a saved standalone page. Its historical results and optional
+analysis caches are separate from the checkpoint 2 generator. Dashboard rebuild
+and search scripts are absent from the current source tree.
 
 ### Basic linear regression
 

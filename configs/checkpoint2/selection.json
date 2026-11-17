@@ -1012,7 +1012,8 @@
             "mae_difference": 4.495256885411962
           }
         ]
-      }
+      },
+      "note": "Screenshot threshold 0.240 differs from the saved 0.160 configuration. Cached predictions at 0.160 reproduce all pictured scores; 0.240 changes those scores. The recorded configuration is preserved."
     }
   ]
 }

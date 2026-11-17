@@ -138,6 +138,8 @@ def main(argv=None):
     selection = load_selection()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--submission', choices=[entry['name'] for entry in selection['submissions']])
+    parser.add_argument('--input', type=Path, default=DEFAULT_TEST_PATH,
+                        help='CSV to predict; defaults to data/testset.csv. Supply rowIndex and the same feature columns.')
     parser.add_argument('--output-dir', type=Path, default=DEFAULT_OUTPUT_DIRECTORY,
                         help='CSV destination; a custom folder also receives its training metrics and upload comments.')
     parser.add_argument('--seed', type=int, default=RANDOM_SEED)
@@ -145,11 +147,10 @@ def main(argv=None):
     if not 0 <= args.seed <= MAX_RANDOM_SEED:
         parser.error('Seed is outside the supported range.')
     training_path = ROOT / 'data' / DEFAULT_TRAINING_PATH.name
-    test_path = ROOT / 'data' / DEFAULT_TEST_PATH.name
     data_hash = hashlib.sha256(training_path.read_bytes()).hexdigest()
     if data_hash != selection['training_data_sha256']:
         raise ValueError('Training data differs from the frozen selection; review the configuration evidence first.')
-    training, test = load_training_data(training_path), load_test_data(test_path)
+    training, test = load_training_data(training_path), load_test_data(args.input)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     # Keep the repository's organised layout; custom destinations remain self-contained.
     default_destination = args.output_dir.resolve() == DEFAULT_OUTPUT_DIRECTORY.resolve()
