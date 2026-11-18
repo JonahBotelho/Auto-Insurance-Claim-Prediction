@@ -28,7 +28,8 @@ function trainingPromptValues(row) {
     ["Amount cap before multiplier",config.amount_cap ?? "None"],["CV folds",config.n_splits]];
   const labels = {family:"Classifier family",iterations:"Boosting iterations",rate:"Learning rate",leaves:"Maximum leaf nodes",
     leaf:"Minimum samples per leaf",depth:"Depth",l2:"L2 regularization",oversampling:"Oversampling target (%)",
-    smoothing:"Profile-history smoothing",early_stopping:"Early stopping",amount_history:"Past-amount history"};
+    smoothing:"Profile-history smoothing",early_stopping:"Early stopping",amount_history:"Past-amount history",
+    extended_amount_history:"Past log-amount variance and whole-cent share"};
   for (const [key,value] of Object.entries(settings)) {
     if (key !== "name") values.push([labels[key] || key,String(value)]);
   }
@@ -138,6 +139,7 @@ function renderModelDetails(row) {
     ["Early stopping",settings.early_stopping ?? (row.status ? "Disabled" : "auto")],
     ["Oversampling target",settings.oversampling!=null ? settings.oversampling + "%" : "See blend components"],["Oversampling sampling seed",42],
     ["Profile-history smoothing",settings.smoothing],["Past claim amount feature",settings.amount_history ? "Enabled" : "Disabled"],
+    ["Extended amount history",settings.extended_amount_history ? "Past log-amount variance and whole-cent share" : null],
     ["Severity rule",severityDescriptions[row.severity_method || "weighted_profile"]],
     ["Ridge alpha",row.hasMetrics ? row.alpha : null],["Amount cap before multiplier",row.amount_cap],
     ["Blend components",settings.family==='checkpoint_blend' ? JSON.stringify(settings) : null],

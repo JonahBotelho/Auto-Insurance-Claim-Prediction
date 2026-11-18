@@ -3,8 +3,10 @@ const dataset = JSON.parse(document.getElementById("run-data").textContent);
 const unified = JSON.parse(document.getElementById("unified-data").textContent);
 const elements = Object.fromEntries(Array.from(document.querySelectorAll("[id]")).map(element => [element.id, element]));
 const metricInputs = ["maeMin","maeMax","precisionMin","precisionMax","recallMin","recallMax"];
+const f1Study = "claim-f1-tuning";
+const defaultSource = unified.sources.some(source => source.id === f1Study) ? f1Study : "";
 let rows = [], page = 0, pageSize = 50, sortKey = "mae", sortDirection = 1;
-let ready = false, requestId = 0, debounce;
+let ready = false, historicalRequested = false, requestId = 0, debounce;
 const numbers = new Intl.NumberFormat("en-US");
 const percent = value => (value * 100).toFixed(2) + "%";
 const decimal = (value, digits = 4) => Number(value).toFixed(digits);
@@ -31,8 +33,7 @@ for (const value of [...new Set([...dataset.runs.map(run => run.seed ?? 42),...u
 }
 const workerUrl = URL.createObjectURL(new Blob([elements["worker-source"].textContent], {type:"text/javascript"}));
 const worker = new Worker(workerUrl);
-worker.postMessage({type:"init", runs:dataset.runs, records:unified.records, alphas:dataset.alphas, scales:dataset.scales, count:dataset.scoreCount,
-  payload:elements["score-data"].textContent.trim()});
+worker.postMessage({type:"init", runs:dataset.runs, records:unified.records, alphas:dataset.alphas, scales:dataset.scales, count:dataset.scoreCount});
 
 function showError(message) {
   elements.filterError.textContent = message; elements.filterError.hidden = false;
@@ -79,7 +80,12 @@ function query() {
     const filters = readFilters();
     elements.filterError.hidden = true;
     elements.resultCount.textContent = "Finding matching configurations...";
-    worker.postMessage({type:"query",filters,priority:elements.priority.value,requestId:++requestId});
+    const request = {type:"query",filters,priority:elements.priority.value,requestId:++requestId};
+    if (!historicalRequested && (!filters.source || filters.source === "historical")) {
+      request.payload = elements["score-data"].textContent.trim();
+      historicalRequested = true;
+    }
+    worker.postMessage(request);
   } catch (error) {
     requestId++; showError(error.message); elements.download.disabled = true;
     elements.resultCount.textContent = "Fix the invalid filters to update results.";
@@ -95,7 +101,10 @@ worker.onmessage = ({data: message}) => {
   } else if (message.type === "results" && message.requestId === requestId) {
     rows = message.rows;
     page = 0; orderRows(); render();
-  } else if (message.type === "error") showError(message.message);
+  } else if (message.type === "error" && (message.requestId === undefined || message.requestId === requestId)) {
+    showError(message.message);
+    elements.resultCount.textContent = "Unable to load matching configurations.";
+  }
 };
 worker.onerror = event => showError("Unable to load the local score data. Use a current Chrome or Edge browser. " + event.message);
 
@@ -105,7 +114,7 @@ function orderRows() {
     if (missing(a) && missing(b)) return left.fit_id-right.fit_id;
     if (missing(a)) return 1;
     if (missing(b)) return -1;
-    return (a-b) * sortDirection || left.fit_id-right.fit_id;
+    return (a-b) * sortDirection || (sortKey === "f1" ? left.mae-right.mae : 0) || left.fit_id-right.fit_id;
   });
   for (const button of document.querySelectorAll("[data-sort]")) {
     const active = button.dataset.sort === sortKey;
@@ -120,7 +129,8 @@ function cell(text, className = "") {
 function render() {
   if (elements.pageSize.value === "all") pageSize = Math.max(1, rows.length);
   const scored = rows.filter(row => row.hasMetrics).length;
-  elements.resultCount.textContent = numbers.format(rows.length) + (elements.favouritesOnly.checked ? " favourited results / " : " matching settings groups / ")
+  const countLabel = elements.source.value === f1Study ? " matching runs / " : " matching settings groups / ";
+  elements.resultCount.textContent = numbers.format(rows.length) + (elements.favouritesOnly.checked ? " favourited results / " : countLabel)
     + numbers.format(scored) + " scored / " + numbers.format(rows.length-scored) + " without saved metrics";
   elements.tableBody.replaceChildren();
   const maximumPage = Math.max(0,Math.ceil(rows.length/pageSize)-1);
@@ -188,12 +198,15 @@ elements.evaluation.addEventListener("change",query); elements.seed.addEventList
 elements.minimumSeeds.addEventListener("change",query);
 elements.coverage.addEventListener("change",query);
 elements.includeMissing.addEventListener("change",query);
-elements.priority.addEventListener("change",() => {
-  sortKey = elements.priority.value; sortDirection = sortKey === "mae" ? 1 : -1; query();
-});
+function setPriority(key) {
+  elements.priority.value = sortKey = key;
+  sortDirection = key === "mae" ? 1 : -1;
+}
+elements.priority.addEventListener("change",() => {setPriority(elements.priority.value); query();});
 elements.reset.addEventListener("click",() => {
   for (const key of [...metricInputs,"runId"]) elements[key].value = "";
-  elements.evaluation.value = ""; elements.seed.value = ""; elements.minimumSeeds.value = "1"; elements.source.value=""; elements.coverage.value="available"; elements.includeMissing.checked = true; elements.favouritesOnly.checked = false; query();
+  elements.evaluation.value = ""; elements.seed.value = ""; elements.minimumSeeds.value = "1"; elements.source.value=defaultSource; elements.coverage.value="available"; elements.includeMissing.checked = true; elements.favouritesOnly.checked = false;
+  setPriority(defaultSource === f1Study ? "f1" : "mae"); query();
 });
 elements.previousLimits.addEventListener("click",() => {
   for (const key of metricInputs) elements[key].value = "";

@@ -29,18 +29,24 @@ def validate_dashboard_config(config):
     if not isinstance(settings, dict) or settings.get("family") not in DASHBOARD_CLASSIFIER_LABELS:
         raise ValueError("Choose a supported classifier family.")
     allowed_classifier = {"name", "family", "iterations", "rate", "leaves", "leaf", "depth", "l2",
-                          "oversampling", "smoothing", "early_stopping", "amount_history"}
+                          "oversampling", "smoothing", "early_stopping", "amount_history",
+                          "extended_amount_history"}
     if set(settings) - allowed_classifier:
         raise ValueError("Unknown classifier configuration field.")
     validate_oversampling_percent(settings.get("oversampling"))
     _number(settings.get("smoothing"), "Profile smoothing")
     if type(settings.get("amount_history", False)) is not bool:
         raise ValueError("Past-amount history must be true or false.")
+    if type(settings.get("extended_amount_history", False)) is not bool:
+        raise ValueError("Extended amount history must be true or false.")
+    if settings.get("extended_amount_history") and not settings.get("amount_history"):
+        raise ValueError("Extended amount history requires past-amount history.")
     family = settings["family"]
     if family != "posterior":
         keys = ["leaf"] if family in ["forest", "extra"] else ["iterations"]
         keys += ["leaves", "leaf"] if family == "hist" else []
         keys += ["depth"] if family in ["cat", "cat_native", "lgbm", "xgb"] else []
+        keys += ["leaf"] if family == "lgbm" and "leaf" in settings else []
         for key in keys:
             _number(settings.get(key), key, minimum=2 if key == "leaves" else 1, integer=True)
         if family not in ["forest", "extra"]:

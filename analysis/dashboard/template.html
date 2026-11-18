@@ -37,7 +37,7 @@
 <p class="table-note">Matching settings are averaged across distinct seeds at the same threshold, Ridge alpha and multiplier. Duplicate seed observations count once; every source is retained. Filters apply before ranking. Seed coverage can differ between points; use minimum seeds or maximum shared coverage for stricter comparisons. Each checkpoint 2 submission keeps its own row. The five-seed rerun source shows all selected fixed operating points. The historical 95/5 source shows its original three-seed and five-seed averages separately.</p>
 <p class="table-note"><strong>Mean MAE</strong> is error over all holdout rows. <strong>All-zero mean MAE</strong> predicts zero everywhere on the same rows. <strong>MAE reduction</strong> is all-zero mean MAE minus mean MAE; positive is better. Improvement averages the per-seed percentage reductions.</p>
 <p class="table-note"><strong>Mean F1</strong> averages each distinct seed's claim F1: 2 × precision × recall / (precision + recall), or 0 when both are zero. Higher is better (0–1); it measures claim detection, not amount accuracy.</p>
-<p class="table-note">Select <strong>Tuned 500 — five-seed search</strong> to see every new fixed run, including runs below the precision/recall targets. Each uses seeds 41–45 and at least 20% evaluation. Its operating points were tuned on these same five holdouts.</p>
+<p class="table-note"><strong>Claim F1 tuning (500 runs)</strong> shows all 500 cutoffs scored on seeds 41–45. Choose another study or <strong>All sources</strong> to compare earlier results.</p>
 <div class="table-scroll">
 <table id="runTable">
 <thead><tr>

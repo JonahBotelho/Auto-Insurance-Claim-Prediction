@@ -9,7 +9,9 @@ function classifierSettings(run) {
   const settings=run.settings ? {...run.settings} : {family:'hist',iterations:run.max_iter,rate:run.learning_rate,
     leaves:run.max_leaf_nodes,leaf:run.min_samples_leaf,l2:run.l2_regularization,
     oversampling:run.oversampling_percent,smoothing:run.smoothing,early_stopping:'auto'};
-  delete settings.name;delete settings.amount_cap;settings.amount_history ??= false;return settings;
+  delete settings.name;delete settings.amount_cap;settings.amount_history ??= false;
+  if (!settings.extended_amount_history) delete settings.extended_amount_history;
+  return settings;
 }
 function initializeGroups(runs,records) {
   const indexed=new Map();metadata=new Map();groupByRun=new Map();

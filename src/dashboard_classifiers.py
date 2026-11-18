@@ -17,7 +17,7 @@ def build_dashboard_classifier(settings, seed=RANDOM_SEED):
     if family == "lgbm":
         from lightgbm import LGBMClassifier
         return LGBMClassifier(n_estimators=settings["iterations"], learning_rate=settings["rate"],
-                              num_leaves=2 ** settings["depth"], min_child_samples=50,
+                              num_leaves=2 ** settings["depth"], min_child_samples=settings.get("leaf", 50),
                               reg_lambda=settings["l2"], verbosity=-1, n_jobs=4, **common)
     if family in ["cat", "cat_native"]:
         from catboost import CatBoostClassifier

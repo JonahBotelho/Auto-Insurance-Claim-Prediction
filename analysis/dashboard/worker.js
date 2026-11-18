@@ -1,5 +1,5 @@
 /* Query original binary scores together with every retained study observation. */
-let data;
+let data, historicalLoad, historicalCount;
 function allowedSeed(seed,filters) {return filters.seed===null || filters.seed===undefined || seed===filters.seed;}
 function fixedReruns(active,filters,favourites) {
   const rows=[];
@@ -9,7 +9,8 @@ function fixedReruns(active,filters,favourites) {
       label:record.label,source:record.source,record_id:record.uid,candidate:record.candidate}));
     if (!scores.length) continue;
     const row=aggregatePoint(group,scores,[record.threshold,record.ridge_alpha,record.scale],filters);
-    row.fit_id=({five:100000,low:200000,tuned:300000}[filters.source])+record.candidate;row.candidate=record.candidate;
+    const idOffset={five:100000,low:200000,tuned:300000}[filters.source] ?? 0;
+    row.fit_id=idOffset+record.candidate;row.candidate=record.candidate;
     if (row.seed_count>=filters.minimumSeeds && matches(row,filters)
         && (!favourites || favourites.has(row.favourite_key))) rows.push(row);
   }
@@ -42,7 +43,8 @@ function query(filters,priority) {
         || group.records.some(row=>row.candidate===filters.runId || row.historical_run===filters.runId));
   }));
   // Every selected fixed point stays visible, including points sharing a classifier.
-  if (['five','low','tuned'].includes(filters.source)) return fixedReruns(active,filters,favourites);
+  if (['five','low','tuned','claim-history-tuning','claim-f1-tuning'].includes(filters.source))
+    return fixedReruns(active,filters,favourites);
   const best=new Map(),points=new Map(),savedRows=[];
   function addPoint(group,key,reference) {
     if (favourites && !bookmarked.get(group.key)?.has(key)) return;
@@ -107,17 +109,27 @@ function query(filters,priority) {
   // Several bookmarked points may share a settings group; View needs distinct display IDs.
   return favourites ? rows.map((row,index)=>({...row,fit_id:400000+index})) : rows;
 }
+async function loadHistoricalScores(payload) {
+  const bytes=Uint8Array.from(atob(payload),character=>character.charCodeAt(0));
+  const stream=new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+  const buffer=await new Response(stream).arrayBuffer();
+  if (buffer.byteLength!==historicalCount*18) throw new Error('Embedded score data is incomplete.');
+  data=new DataView(buffer);
+}
 self.onmessage=async ({data:message})=>{
   try {
     if (message.type==='init') {
       alphaValues=message.alphas;scaleValues=message.scales;
+      historicalCount=message.count;
       initializeGroups(message.runs,message.records);
-      const bytes=Uint8Array.from(atob(message.payload),character=>character.charCodeAt(0));
-      const stream=new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
-      const buffer=await new Response(stream).arrayBuffer();
-      if (buffer.byteLength!==message.count*18) throw new Error('Embedded score data is incomplete.');
-      data=new DataView(buffer);self.postMessage({type:'ready',groups:groups.length});return;
+      self.postMessage({type:'ready',groups:groups.length});return;
     }
-    if (message.type==='query') self.postMessage({type:'results',requestId:message.requestId,rows:query(message.filters,message.priority)});
-  } catch (error) {self.postMessage({type:'error',message:String(error.message || error)});}
+    if (message.type==='query') {
+      if (!message.filters.source || message.filters.source==='historical') {
+        historicalLoad ??= loadHistoricalScores(message.payload);
+        await historicalLoad;
+      }
+      self.postMessage({type:'results',requestId:message.requestId,rows:query(message.filters,message.priority)});
+    }
+  } catch (error) {self.postMessage({type:'error',requestId:message.requestId,message:String(error.message || error)});}
 };

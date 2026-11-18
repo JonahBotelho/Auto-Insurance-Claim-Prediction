@@ -6,9 +6,8 @@ vehicle features. `rowIndex` identifies rows and is excluded from model inputs.
 Input datasets and the submission template are in `data/`:
 `trainingset.csv`, `testset.csv`, and `submission.csv`.
 
-Our three evaluation priorities are **MAE** (mean absolute prediction error;
-lower is better), **precision** (actual claims among predicted claims), and
-**recall** (detected claims among all actual claims). A claim is `ClaimAmount > 0`.
+We evaluate claim amounts by **MAE** (lower is better) and claim detection by
+**F1**, the harmonic mean of precision and recall. A claim is `ClaimAmount > 0`.
 
 ## Training and prediction
 
@@ -40,8 +39,12 @@ is an approximation. Targets below the existing claim rate leave the rows unchan
 Training reserves a stratified 38% holdout and selects a claim-probability
 threshold from 0.10–0.20 inclusive in steps of 0.01 (11 candidates) using five-fold
 cross-validation on the remaining 62%. The holdout does not influence threshold
-selection. Training reports CV MAE, training MAE on the fitted training partition,
-holdout MAE, classifier AUC, and a classification
+selection. Each fold fits once and scores all thresholds on the same predictions.
+Training picks the lowest mean CV MAE among thresholds with mean claim F1 of at
+least 0.10. If none qualify, it picks the highest F1 and breaks ties by MAE.
+Use `--min-claim-f1` to change the minimum or set it to 0 for MAE-only selection.
+A config with one fixed threshold uses that threshold. Training reports CV MAE
+and F1, training MAE, holdout MAE and F1, classifier AUC, and a classification
 report with true/false positive and negative counts, treating actual and predicted
 `ClaimAmount > 0` as claims. It then refits on all training rows and saves
 `models/two_stage_claim_model.joblib`, replacing the file if it exists.
@@ -74,7 +77,8 @@ python -m src.train --config run-1517.json
 ```
 
 This supports all dashboard classifiers, past-amount history, unweighted medians,
-quantile severity and amount caps. For CatBoost or XGBoost, first install
+quantile severity and amount caps. LightGBM configs can set the minimum leaf
+size with `classifier.leaf` (default 50). For CatBoost or XGBoost, first install
 `src/optional_requirements.txt`. Review the summary and press Enter to train;
 the saved model works with `src.predict`. Plain `--config` remains interactive.
 In JSON, `weighted_profile` weights profile medians by probability;
@@ -82,9 +86,21 @@ In JSON, `weighted_profile` weights profile medians by probability;
 Runs without retained score settings export documented defaults for those
 missing values; their exact historical result cannot be recovered.
 
+Two extended-history LightGBM configs use a 0.25 claim threshold and a 2,500
+amount cap before the 0.9 multiplier. On 25% holdouts with seeds 41–45, the 45%
+oversampling config had mean MAE 97.31 and F1 0.4927. The config with oversampling
+disabled had mean MAE 97.36 and F1 0.4958. Run either with its saved evaluation seed:
+
+```powershell
+python -m src.train --config configs/claim_history/lightgbm_45_percent.json
+python -m src.train --config configs/claim_history/lightgbm_no_oversampling.json
+```
+
 Profile history groups exact feature profiles. Each fit builds statistics from
 its own training partition and excludes each row's own label when fitting the
-classifier. Profile-median severity uses matching positive training claims,
+classifier. With `extended_amount_history` enabled, the classifier also gets the
+variance of past positive log amounts and the share recorded to whole cents.
+Profile-median severity uses matching positive training claims,
 falling back to log-target Ridge for profiles without positive history.
 Training MAE is in-sample and profile summaries include those training rows.
 
@@ -153,6 +169,14 @@ python -m pip install -r analysis/requirements.txt
 
 Open `dashboard/index.html` for historical runs, both seed searches, fresh
 historical evaluations, and all ten checkpoint 2 submissions.
+Select **Extended claim history (seeds 41-45)** to see the two LightGBM results,
+their per-seed metrics, and downloadable training configurations.
+Select **Extended claim history tuning (500 runs)** for 500 operating points
+scored on the same 25% holdouts with seeds 41–45. The source JSON includes a
+comparison of the selected leaders and earlier baselines on seeds 301–305.
+The dashboard opens on **Claim F1 tuning (500 runs)**, sorted by mean claim
+F1. These results use seeds 41–45 only. Select **All sources** to include
+historical scores. Rebuild the F1 study with `python -m analysis.tune_claim_f1`.
 Matching operating points average unique seeds; source,
 seed and coverage filters control comparisons. Mean MAE, matched all-zero mean
 MAE, absolute/percentage improvement, precision, recall, mean F1 and aggregate are shown.
@@ -166,8 +190,9 @@ storage for the same page/browser; if storage is blocked, they last for the sess
 Clearing filters keeps bookmarks. Multiple operating points can be bookmarked per model.
 
 The dashboard is a saved standalone page. Its historical results and optional
-analysis caches are separate from the checkpoint 2 generator. Dashboard rebuild
-and search scripts are absent from the current source tree.
+analysis caches are separate from the checkpoint 2 generator. Regenerate the
+extended-history tuning scores with `python -m analysis.tune_claim_history --output analysis/output/claim_history_tuning.json --dashboard dashboard/index.html`
+after installing `src/requirements.txt` and `src/optional_requirements.txt`.
 
 ### Basic linear regression
 
