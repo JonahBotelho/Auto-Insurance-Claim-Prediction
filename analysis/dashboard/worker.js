@@ -1,6 +1,15 @@
 /* Query original binary scores together with every retained study observation. */
 let data, historicalLoad, historicalCount;
 function allowedSeed(seed,filters) {return filters.seed===null || filters.seed===undefined || seed===filters.seed;}
+function historicalScore(offset,run) {
+  const tp=data.getUint16(offset+6,true),fp=data.getUint16(offset+8,true),mae=data.getFloat64(offset+10,true);
+  const precision=tp+fp ? tp/(tp+fp) : 0,recall=tp/run.claims;
+  const f1=precision+recall ? 2*precision*recall/(precision+recall) : 0;
+  return {mae,precision,recall,f1,relative_gain:1-mae/run.zero_mae};
+}
+function historicalPoint(group,offset,filters) {
+  return aggregatePoint(group,[offset],pointAt(offset).split('/').map(Number),filters);
+}
 function fixedReruns(active,filters,favourites) {
   const rows=[];
   for (const group of active) for (const record of group.records) {
@@ -9,7 +18,7 @@ function fixedReruns(active,filters,favourites) {
       label:record.label,source:record.source,record_id:record.uid,candidate:record.candidate}));
     if (!scores.length) continue;
     const row=aggregatePoint(group,scores,[record.threshold,record.ridge_alpha,record.scale],filters);
-    const idOffset={five:100000,low:200000,tuned:300000}[filters.source] ?? 0;
+    const idOffset={five:100000,tuned:300000}[filters.source] ?? 0;
     row.fit_id=idOffset+record.candidate;row.candidate=record.candidate;
     if (row.seed_count>=filters.minimumSeeds && matches(row,filters)
         && (!favourites || favourites.has(row.favourite_key))) rows.push(row);
@@ -43,7 +52,7 @@ function query(filters,priority) {
         || group.records.some(row=>row.candidate===filters.runId || row.historical_run===filters.runId));
   }));
   // Every selected fixed point stays visible, including points sharing a classifier.
-  if (['five','low','tuned','claim-history-tuning','claim-f1-tuning'].includes(filters.source))
+  if (['five','tuned','claim-history-tuning','claim-f1-tuning'].includes(filters.source))
     return fixedReruns(active,filters,favourites);
   const best=new Map(),points=new Map(),savedRows=[];
   function addPoint(group,key,reference) {
@@ -61,12 +70,10 @@ function query(filters,priority) {
       // Stream singleton historical groups to avoid millions of JS objects.
       if (group.runs.length===1 && (!group.records.length || filters.source==='historical')) {
         if (filters.minimumSeeds>1) continue;
-        const tp=data.getUint16(offset+6,true),fp=data.getUint16(offset+8,true),mae=data.getFloat64(offset+10,true);
-        const precision=tp+fp ? tp/(tp+fp) : 0,recall=tp/run.claims,gain=1-mae/run.zero_mae;
-        const f1=precision+recall ? 2*precision*recall/(precision+recall) : 0;
-        const score={mae,precision,recall,f1,relative_gain:gain,aggregate:100*Math.cbrt(precision*recall*Math.max(0,gain))};
-        if (matches(score,filters) && better(score,best.get(group),priority))
-          best.set(group,aggregatePoint(group,[offset],pointAt(offset).split('/').map(Number),filters));
+        const score=historicalScore(offset,run);
+        if (!matches(score,filters)) continue;
+        if (priority==='aggregate') score.aggregate=checkpointPoints(score.mae,score.f1).aggregate;
+        if (better(score,best.get(group),priority)) best.set(group,historicalPoint(group,offset,filters));
       } else addPoint(group,pointAt(offset),offset);
     }
   }
@@ -129,7 +136,8 @@ self.onmessage=async ({data:message})=>{
         historicalLoad ??= loadHistoricalScores(message.payload);
         await historicalLoad;
       }
-      self.postMessage({type:'results',requestId:message.requestId,rows:query(message.filters,message.priority)});
+      const rows=query(message.filters,message.priority);
+      self.postMessage({type:'results',requestId:message.requestId,rows});
     }
   } catch (error) {self.postMessage({type:'error',requestId:message.requestId,message:String(error.message || error)});}
 };

@@ -15,7 +15,9 @@ function setupSourceActions() {
     downloadPayload('historical_scores.gz',bytes,'application/gzip');
   });
   for (const source of unified.sources) {
-    const option=document.createElement('option');option.value=source.id;option.textContent=source.name;elements.source.append(option);
+    if (!source.archived) {
+      const option=document.createElement('option');option.value=source.id;option.textContent=source.name;elements.source.append(option);
+    }
     button(source.name+' (JSON)',()=>downloadPayload(source.id+'-complete-source.json',source));
   }
   button('Archive checksums',()=>downloadPayload('dashboard-source-manifest.json',unified.archive_manifest));

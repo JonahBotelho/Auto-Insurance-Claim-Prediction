@@ -168,23 +168,30 @@ python -m pip install -r analysis/requirements.txt
 ### Model dashboard
 
 Open `dashboard/index.html` for historical runs, both seed searches, fresh
-historical evaluations, and all ten checkpoint 2 submissions.
+historical evaluations, and checkpoint results. Select **Checkpoint 2** for
+the ten final submissions from `submission.md` and their recorded holdouts,
+including the 95/5 run as `2_2_1`.
+Their aggregate points use the dashboard formula below. **Historical checkpoint
+blends** contains the earlier five-seed blend evaluations.
 Select **Extended claim history (seeds 41-45)** to see the two LightGBM results,
 their per-seed metrics, and downloadable training configurations.
 Select **Extended claim history tuning (500 runs)** for 500 operating points
 scored on the same 25% holdouts with seeds 41–45. The source JSON includes a
 comparison of the selected leaders and earlier baselines on seeds 301–305.
-The dashboard opens on **Claim F1 tuning (500 runs)**, sorted by mean claim
-F1. These results use seeds 41–45 only. Select **All sources** to include
-historical scores. Rebuild the F1 study with `python -m analysis.tune_claim_f1`.
+The dashboard opens on **All sources**, sorted by mean MAE. Select **Claim F1
+tuning (500 runs)** to see results from seeds 41–45 sorted by mean claim F1.
+Rebuild the F1 study with `python -m analysis.tune_claim_f1`.
 Matching operating points average unique seeds; source,
 seed and coverage filters control comparisons. The dashboard shows mean MAE,
 the lowest saved MAE across the included seeds, matched all-zero mean MAE,
-absolute/percentage improvement, precision, recall, mean F1 and aggregate.
+absolute/percentage improvement, precision, recall, mean F1 and aggregate points.
+Aggregate points compare mean holdout MAE and mean F1 against the 50 checkpoint 1
+test-set submissions. Exact matches earn their published points, including tied
+ranks. For values between checkpoint entries, the dashboard uses the full-precision
+metric to linearly interpolate between their points. Each metric earns 1–50
+points, rounded to two decimal places before the two scores are added.
 Mean F1 averages each seed's claim-detection F1 (0–1; higher is better),
 with zero when precision and recall are both zero. It is sortable and included in exports.
-The historical checkpoint source retains its original names and five 25% holdouts
-(seeds 42–46); the current selection's names and cohorts are in `submission.md`.
 Star rows to favourite their exact configuration and seed cohort; **Favourites only**
 shows saved rows alongside the other filters. Bookmarks persist in browser local
 storage for the same page/browser; if storage is blocked, they last for the session.

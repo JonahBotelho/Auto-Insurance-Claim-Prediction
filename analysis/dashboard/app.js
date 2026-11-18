@@ -4,7 +4,7 @@ const unified = JSON.parse(document.getElementById("unified-data").textContent);
 const elements = Object.fromEntries(Array.from(document.querySelectorAll("[id]")).map(element => [element.id, element]));
 const metricInputs = ["maeMin","maeMax","precisionMin","precisionMax","recallMin","recallMax"];
 const f1Study = "claim-f1-tuning";
-const defaultSource = unified.sources.some(source => source.id === f1Study) ? f1Study : "";
+const defaultSource = "";
 let rows = [], page = 0, pageSize = 50, sortKey = "mae", sortDirection = 1;
 let ready = false, historicalRequested = false, requestId = 0, debounce;
 const numbers = new Intl.NumberFormat("en-US");
@@ -156,9 +156,11 @@ function render() {
     for (const name of ["mae","min_mae","baseline_mae","mae_difference","relative_gain","precision","recall","f1","aggregate","threshold"]) {
       const value = row[name];
       const isPercent = ["precision","recall","relative_gain"].includes(name);
-      const display = missing(value) ? String.fromCharCode(8212) : isPercent ? percent(value) : decimal(value,name === "threshold" ? 3 : 4);
+      const display = missing(value) ? String.fromCharCode(8212) : name === "aggregate" ? decimal(value,2)
+        : isPercent ? percent(value) : decimal(value,name === "threshold" ? 3 : 4);
       const td = cell(display, missing(value) ? "missing" : "score" + (name === sortKey ? " metric-primary" : ""));
       if (!missing(value)) td.title = String(isPercent ? value * 100 : value);
+      if (name === "aggregate" && row.hasMetrics) td.title = decimal(row.mae_points,2) + " MAE points + " + decimal(row.f1_points,2) + " F1 points";
       tr.append(td);
     }
     tr.append(cell(row.hasMetrics ? numbers.format(row.tp) : String.fromCharCode(8212)),
@@ -184,7 +186,7 @@ function openRun(id) {
   if (row) showRunDetails(row);
 }
 function exportCsv() {
-  const fields = ["labels","source_ids","run_ids","seed_count","seeds","status","name","severity_method","evaluation_percent","mean_mae","min_mae","all_zero_mean_mae","mae_difference","relative_gain","precision","recall","f1","aggregate","threshold","alpha","scale","tp","fp",
+  const fields = ["labels","source_ids","run_ids","seed_count","seeds","status","name","severity_method","evaluation_percent","mean_mae","min_mae","all_zero_mean_mae","mae_difference","relative_gain","precision","recall","f1","aggregate","mae_points","f1_points","threshold","alpha","scale","tp","fp",
     "max_iter","learning_rate","max_leaf_nodes","min_samples_leaf","l2_regularization","oversampling_percent","smoothing","hasMetrics"];
   const lines = [fields.join(",")];
   const escape = value => '"' + String(Array.isArray(value) ? value.join(';') : value).replaceAll('"','""') + '"';
@@ -206,7 +208,7 @@ elements.priority.addEventListener("change",() => {setPriority(elements.priority
 elements.reset.addEventListener("click",() => {
   for (const key of [...metricInputs,"runId"]) elements[key].value = "";
   elements.evaluation.value = ""; elements.seed.value = ""; elements.minimumSeeds.value = "1"; elements.source.value=defaultSource; elements.coverage.value="available"; elements.includeMissing.checked = true; elements.favouritesOnly.checked = false;
-  setPriority(defaultSource === f1Study ? "f1" : "mae"); query();
+  setPriority("mae"); query();
 });
 elements.previousLimits.addEventListener("click",() => {
   for (const key of metricInputs) elements[key].value = "";
