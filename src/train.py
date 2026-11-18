@@ -5,21 +5,23 @@ training data and saves the result for predict.py to use.
 """
 
 import argparse
+from dataclasses import replace
 from pathlib import Path
 import sys
 
-import numpy as np
-from sklearn.metrics import classification_report, confusion_matrix, mean_absolute_error, roc_auc_score
+from sklearn.metrics import classification_report, confusion_matrix, f1_score, mean_absolute_error, roc_auc_score
 
 from src.data_loading import add_has_claim_label, load_training_data
 from src.evaluation import (
-    cross_validate_mae, stratified_train_validation_split, validate_evaluation_partitions,
+    cross_validate_thresholds, stratified_train_validation_split, validate_evaluation_partitions,
 )
 from src.feature_schema import (
-    ALL_FEATURE_COLUMNS, DEFAULT_CV_FOLDS, RANDOM_SEED, TARGET_COLUMN, THRESHOLD_SCALE,
+    ALL_FEATURE_COLUMNS, DEFAULT_CV_FOLDS, DEFAULT_MIN_CLAIM_F1, RANDOM_SEED, TARGET_COLUMN, THRESHOLD_SCALE,
 )
 from src.model_io import DEFAULT_MODEL_PATH, save_model
-from src.training_config import TrainingSettings, confirm_training, parse_fold_count, parse_random_seed, prompt_settings
+from src.training_config import (
+    TrainingSettings, confirm_training, parse_claim_f1, parse_fold_count, parse_random_seed, prompt_settings,
+)
 from src.two_stage_model import build_two_stage_model
 
 
@@ -31,6 +33,8 @@ def parse_args(argv=None) -> argparse.Namespace:
                         help="CV fold count (also the initial value in config mode).")
     parser.add_argument("--seed", type=parse_random_seed, default=RANDOM_SEED,
                         help="Evaluation/model seed (also the initial value in config mode).")
+    parser.add_argument("--min-claim-f1", type=parse_claim_f1, default=DEFAULT_MIN_CLAIM_F1,
+                        help="Minimum mean CV claim F1 when selecting a threshold (0 uses MAE alone).")
     return parser.parse_args(argv)
 
 
@@ -49,29 +53,28 @@ def _build_model(settings, threshold):
 
 
 def _select_best_threshold(X_train, y_train, settings):
-    # Holdout rows never influence selection; ascending candidates and strict
-    # improvement make ties reproducibly prefer the lowest threshold.
-    best_threshold = settings.min_threshold
-    best_mean_mae = float("inf")
-    for threshold in settings.threshold_candidates():
-        candidate_model = _build_model(settings, threshold)
-        try:
-            fold_scores = np.asarray(cross_validate_mae(
-                candidate_model, X_train, y_train, n_splits=settings.n_splits,
-                random_seed=settings.random_seed,
-            ))
-        except Exception as error:
-            raise ValueError(f"Cross-validation failed at threshold "
-                             f"{threshold / THRESHOLD_SCALE:.3f}: {error}") from error
-        if fold_scores.size != settings.n_splits or not np.isfinite(fold_scores).all():
-            raise ValueError("Cross-validation returned missing or nonfinite scores; training stopped.")
-        mean_mae = fold_scores.mean()
-        print(f"Threshold {threshold / THRESHOLD_SCALE:.3f}: mean CV MAE = {mean_mae:.2f}")
-        if mean_mae < best_mean_mae:
-            best_mean_mae = mean_mae
-            best_threshold = threshold
-    print(f"Selected threshold {best_threshold / THRESHOLD_SCALE:.3f} (mean CV MAE {best_mean_mae:.2f})")
-    return best_threshold
+    candidates = settings.threshold_candidates()
+    probabilities = [float(threshold) / THRESHOLD_SCALE for threshold in candidates]
+    try:
+        mae, f1 = cross_validate_thresholds(
+            _build_model(settings, candidates[0]), X_train, y_train, probabilities,
+            n_splits=settings.n_splits, random_seed=settings.random_seed,
+        )
+    except Exception as error:
+        raise ValueError(f"Threshold cross-validation failed: {error}") from error
+    for threshold, mean_mae, mean_f1 in zip(probabilities, mae, f1):
+        print(f"Threshold {threshold:.3f}: mean CV MAE {mean_mae:.2f}, claim F1 {mean_f1:.4f}")
+
+    eligible = [index for index, score in enumerate(f1) if score >= settings.min_claim_f1]
+    if eligible:
+        best = min(eligible, key=lambda index: mae[index])
+    elif len(candidates) == 1:
+        best = 0
+    else:
+        print(f"No threshold met claim F1 {settings.min_claim_f1:.3f}; selecting by highest F1, then lowest MAE.")
+        best = min(range(len(candidates)), key=lambda index: (-f1[index], mae[index]))
+    print(f"Selected threshold {probabilities[best]:.3f} (mean CV MAE {mae[best]:.2f}, claim F1 {f1[best]:.4f})")
+    return candidates[best]
 
 
 def _print_holdout_results(model, X_val, y_val):
@@ -85,6 +88,7 @@ def _print_holdout_results(model, X_val, y_val):
     # Count the final nonzero outputs so the report reflects the selected
     # threshold and zero-clipping, rather than the classifier's default cutoff.
     predicted_has_claim = (holdout_predictions > 0).astype(int)
+    print(f"Holdout claim F1: {f1_score(has_claim_val, predicted_has_claim, zero_division=0):.4f}")
     true_negatives, false_positives, false_negatives, true_positives = confusion_matrix(
         has_claim_val, predicted_has_claim, labels=[0, 1]
     ).ravel()
@@ -130,12 +134,12 @@ def _train_and_save(settings, X, y, partitions):
 def main(argv=None):
     args = parse_args(argv)
     try:
-        settings = TrainingSettings(n_splits=args.n_splits, random_seed=args.seed)
+        settings = TrainingSettings(n_splits=args.n_splits, random_seed=args.seed, min_claim_f1=args.min_claim_f1)
         if args.config is True:
             settings = prompt_settings(settings)
         elif args.config:
             from src.dashboard_config import load_dashboard_settings
-            settings = load_dashboard_settings(args.config)
+            settings = replace(load_dashboard_settings(args.config), min_claim_f1=args.min_claim_f1)
         X, y, partitions = _prepare_training_data(settings)
         if args.config:
             confirm_training(settings, DEFAULT_MODEL_PATH)

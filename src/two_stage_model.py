@@ -157,13 +157,18 @@ class TwoStageClaimModel(BaseEstimator, RegressorMixin):
             probabilities, getattr(self, "claim_prior_odds_ratio_", 1.0),
         )
 
-    def predict(self, X):
+    def predict_components(self, X):
+        """Return claim probabilities and weighted amounts before the cutoff."""
         claim_probability = self.predict_claim_probability(X)
         severity = self.regressor_.predict(X)
         if self.severity_method == "profile_median":
             severity = self.profile_history_.predict_amount(X, severity)
         severity = np.maximum(severity, 0) * self.severity_scale
         expected_amount = np.maximum(claim_probability * severity, 0)
+        return claim_probability, expected_amount
+
+    def predict(self, X):
+        claim_probability, expected_amount = self.predict_components(X)
         return np.where(
             claim_probability >= self.claim_probability_threshold,
             expected_amount,

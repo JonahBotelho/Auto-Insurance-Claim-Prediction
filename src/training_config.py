@@ -6,7 +6,7 @@ import math
 
 from src.feature_schema import (
     DEFAULT_CV_FOLDS, DEFAULT_EVALUATION_PERCENT, DEFAULT_MAX_THRESHOLD_HUNDREDTHS,
-    DEFAULT_MIN_THRESHOLD_HUNDREDTHS, DEFAULT_MODEL_ID, DEFAULT_OVERSAMPLING_PERCENT,
+    DEFAULT_MIN_CLAIM_F1, DEFAULT_MIN_THRESHOLD_HUNDREDTHS, DEFAULT_MODEL_ID, DEFAULT_OVERSAMPLING_PERCENT,
     DEFAULT_PROFILE_HISTORY_SMOOTHING, HIST_CONFIG_OPTIONS, HIST_GRADIENT_BOOSTING_MODEL_ID,
     HIST_GRADIENT_BOOSTING_PARAMS, MAX_EVALUATION_PERCENT, MAX_RANDOM_SEED, MAX_THRESHOLD_HUNDREDTHS,
     MIN_CV_FOLDS, MIN_EVALUATION_PERCENT, MIN_THRESHOLD_HUNDREDTHS, MODEL_LABELS,
@@ -73,6 +73,7 @@ class TrainingSettings:
     severity_scale: float = 1.0
     random_seed: int = RANDOM_SEED
     reproduction: dict | None = None
+    min_claim_f1: float = DEFAULT_MIN_CLAIM_F1
 
     def __post_init__(self):
         if self.reproduction is not None:
@@ -107,6 +108,7 @@ class TrainingSettings:
         _validate_real(self.profile_history_smoothing, "Profile smoothing")
         _validate_real(self.ridge_alpha, "Ridge alpha")
         _validate_real(self.severity_scale, "Severity scale", allow_zero=False)
+        _validate_claim_f1(self.min_claim_f1)
 
     @property
     def evaluation_fraction(self):
@@ -158,6 +160,16 @@ def _parse_real(text, label, allow_zero=True):
     except ValueError as error:
         raise ValueError(f"{label} must be a number.") from error
     return _validate_real(value, label, allow_zero)
+
+
+def _validate_claim_f1(value):
+    if _validate_real(value, "Minimum CV claim F1") > 1:
+        raise ValueError("Minimum CV claim F1 must be between 0 and 1.")
+    return value
+
+
+def parse_claim_f1(text):
+    return _validate_claim_f1(_parse_real(text, "Minimum CV claim F1"))
 
 
 def _parse_boolean(text):
@@ -246,6 +258,7 @@ def prompt_settings(defaults):
         oversampling_percent=oversampling, classifier_params=parameters,
         use_profile_history=history, profile_history_smoothing=smoothing,
         severity_method=severity, ridge_alpha=alpha, severity_scale=scale, random_seed=seed,
+        min_claim_f1=defaults.min_claim_f1,
     )
 
 
@@ -267,6 +280,7 @@ def confirm_training(settings, output_path):
         print(f"Severity: {SEVERITY_METHOD_LABELS[settings.severity_method]}; Ridge alpha: {settings.ridge_alpha}; multiplier: {settings.severity_scale}")
     print(f"Thresholds: {settings.min_threshold / THRESHOLD_SCALE:.3f}-{settings.max_threshold / THRESHOLD_SCALE:.3f} "
           f"in 0.01 steps, including both bounds ({len(settings.threshold_candidates())} candidates)")
+    print(f"Minimum mean CV claim F1 for threshold selection: {settings.min_claim_f1:.3f}")
     print(f"Split: {100 - settings.evaluation_percent}% training / {settings.evaluation_percent}% evaluation; CV folds: {settings.n_splits}")
     print(f"Evaluation/model seed: {settings.random_seed}; oversampling sampling seed: {RANDOM_SEED}")
     print("The split is for evaluation; the saved model is refitted on all rows.")
