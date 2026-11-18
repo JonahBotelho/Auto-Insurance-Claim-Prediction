@@ -153,7 +153,7 @@ function render() {
       note.className = "availability"; note.textContent = "No saved qualifying metrics"; id.append(note);
     }
     tr.append(favourite,id,cell(row.evaluation_percent + "%"),cell(row.hasMetrics ? row.seed_count + " (" + row.seeds.join(", ") + ")" : "—"));
-    for (const name of ["mae","baseline_mae","mae_difference","relative_gain","precision","recall","f1","aggregate","threshold"]) {
+    for (const name of ["mae","min_mae","baseline_mae","mae_difference","relative_gain","precision","recall","f1","aggregate","threshold"]) {
       const value = row[name];
       const isPercent = ["precision","recall","relative_gain"].includes(name);
       const display = missing(value) ? String.fromCharCode(8212) : isPercent ? percent(value) : decimal(value,name === "threshold" ? 3 : 4);
@@ -172,7 +172,7 @@ function render() {
     const message = elements.favouritesOnly.checked ? "No favourites match these filters. Star a row or widen the filters."
       : "No saved configurations match these filters. Clear or widen the filters.";
     const tr = document.createElement("tr"), td = cell(message,"empty");
-    td.colSpan = 17; tr.append(td); fragment.append(tr);
+    td.colSpan = 18; tr.append(td); fragment.append(tr);
   }
   elements.tableBody.append(fragment);
   elements.pageInfo.textContent = rows.length ? numbers.format(start+1) + "-" + numbers.format(Math.min(start+pageSize,rows.length)) + " of " + numbers.format(rows.length) : "0 results";
@@ -184,7 +184,7 @@ function openRun(id) {
   if (row) showRunDetails(row);
 }
 function exportCsv() {
-  const fields = ["labels","source_ids","run_ids","seed_count","seeds","status","name","severity_method","evaluation_percent","mean_mae","all_zero_mean_mae","mae_difference","relative_gain","precision","recall","f1","aggregate","threshold","alpha","scale","tp","fp",
+  const fields = ["labels","source_ids","run_ids","seed_count","seeds","status","name","severity_method","evaluation_percent","mean_mae","min_mae","all_zero_mean_mae","mae_difference","relative_gain","precision","recall","f1","aggregate","threshold","alpha","scale","tp","fp",
     "max_iter","learning_rate","max_leaf_nodes","min_samples_leaf","l2_regularization","oversampling_percent","smoothing","hasMetrics"];
   const lines = [fields.join(",")];
   const escape = value => '"' + String(Array.isArray(value) ? value.join(';') : value).replaceAll('"','""') + '"';

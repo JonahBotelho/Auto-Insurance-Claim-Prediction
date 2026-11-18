@@ -69,7 +69,7 @@ function renderResultSummary(row) {
   elements.dialogTitle.textContent = row.labels.join(", ");
   elements.dialogSubtitle.textContent = row.settings.family==='checkpoint_blend' ? "Checkpoint 2 submission" : (row.name || row.settings.family);
   elements.dialogMetrics.replaceChildren();
-  for (const [label,key] of [["Mean MAE","mae"],["All-zero mean MAE","baseline_mae"],
+  for (const [label,key] of [["Mean MAE","mae"],["Lowest seed MAE","min_mae"],["All-zero mean MAE","baseline_mae"],
     ["MAE reduction","mae_difference"],["Improvement","relative_gain"],["Claim precision","precision"],["Claim recall","recall"],["Mean F1","f1"]]) {
     const card = document.createElement("div"), name = document.createElement("span"), value = document.createElement("strong");
     name.textContent = label;

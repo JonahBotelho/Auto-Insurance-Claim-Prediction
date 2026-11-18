@@ -64,6 +64,7 @@ function aggregatePoint(group,references,point,filters) {
     observations,conflicts,per_seed:perSeed,seeds:perSeed.map(row=>row.seed),seed_count:perSeed.length,
     favourite_key:favouriteKey(group,point,perSeed.map(row=>row.seed)),
     seed:unique.has(42) ? 42 : perSeed[0].seed,mae:mean('mae'),mean_mae:mean('mae'),
+    min_mae:Math.min(...observations.map(score=>score.mae)),
     baseline_mae:mean('baseline_mae'),all_zero_mean_mae:mean('baseline_mae'),mae_difference:mean('mae_difference'),
     // Average per-seed F1, since F1 computed from mean precision/recall differs.
     relative_gain:gain,precision,recall,f1:mean('f1'),tp:mean('tp'),fp:mean('fp'),

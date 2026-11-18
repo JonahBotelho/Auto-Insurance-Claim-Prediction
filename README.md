@@ -178,8 +178,9 @@ The dashboard opens on **Claim F1 tuning (500 runs)**, sorted by mean claim
 F1. These results use seeds 41–45 only. Select **All sources** to include
 historical scores. Rebuild the F1 study with `python -m analysis.tune_claim_f1`.
 Matching operating points average unique seeds; source,
-seed and coverage filters control comparisons. Mean MAE, matched all-zero mean
-MAE, absolute/percentage improvement, precision, recall, mean F1 and aggregate are shown.
+seed and coverage filters control comparisons. The dashboard shows mean MAE,
+the lowest saved MAE across the included seeds, matched all-zero mean MAE,
+absolute/percentage improvement, precision, recall, mean F1 and aggregate.
 Mean F1 averages each seed's claim-detection F1 (0–1; higher is better),
 with zero when precision and recall are both zero. It is sortable and included in exports.
 The historical checkpoint source retains its original names and five 25% holdouts
