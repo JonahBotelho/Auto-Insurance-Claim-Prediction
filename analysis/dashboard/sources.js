@@ -23,9 +23,9 @@ function setupSourceActions() {
   button('Archive checksums',()=>downloadPayload('dashboard-source-manifest.json',unified.archive_manifest));
   const requested=new URLSearchParams(location.search).get('source');
   elements.source.value=[...elements.source.options].some(option=>option.value===requested) ? requested : defaultSource;
-  if (elements.source.value===f1Study) setPriority('f1');
+  if (elements.source.value===f1Study) setSort('f1');
   elements.source.addEventListener('change',()=>{
-    if (elements.source.value===f1Study) setPriority('f1');
+    if (elements.source.value===f1Study) setSort('f1');
     query();
   });
 }

@@ -181,17 +181,20 @@ comparison of the selected leaders and earlier baselines on seeds 301–305.
 The dashboard opens on **All sources**, sorted by mean MAE. Select **Claim F1
 tuning (500 runs)** to see results from seeds 41–45 sorted by mean claim F1.
 Rebuild the F1 study with `python -m analysis.tune_claim_f1`.
-Matching operating points average unique seeds; source,
-seed and coverage filters control comparisons. The dashboard shows mean MAE,
+Matching operating points average unique seeds. Grouped results select the
+lowest mean MAE among matching points. Fixed-point studies show every matching
+point. The results table shows mean MAE,
 the lowest saved MAE across the included seeds, matched all-zero mean MAE,
-absolute/percentage improvement, precision, recall, mean F1 and aggregate points.
+percentage improvement, precision, recall, mean F1 and aggregate points.
+The pagination controls below the table show the total number of matching results.
+Hover over a run label or select **View** to see its full name.
 Aggregate points compare mean holdout MAE and mean F1 against the 50 checkpoint 1
 test-set submissions. Exact matches earn their published points, including tied
 ranks. For values between checkpoint entries, the dashboard uses the full-precision
 metric to linearly interpolate between their points. Each metric earns 1–50
 points, rounded to two decimal places before the two scores are added.
 Mean F1 averages each seed's claim-detection F1 (0–1; higher is better),
-with zero when precision and recall are both zero. It is sortable and included in exports.
+with zero when precision and recall are both zero. It is sortable and included in the run's observations download.
 Star rows to favourite their exact configuration and seed cohort; **Favourites only**
 shows saved rows alongside the other filters. Bookmarks persist in browser local
 storage for the same page/browser; if storage is blocked, they last for the session.

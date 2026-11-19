@@ -4,8 +4,7 @@ function allowedSeed(seed,filters) {return filters.seed===null || filters.seed==
 function historicalScore(offset,run) {
   const tp=data.getUint16(offset+6,true),fp=data.getUint16(offset+8,true),mae=data.getFloat64(offset+10,true);
   const precision=tp+fp ? tp/(tp+fp) : 0,recall=tp/run.claims;
-  const f1=precision+recall ? 2*precision*recall/(precision+recall) : 0;
-  return {mae,precision,recall,f1,relative_gain:1-mae/run.zero_mae};
+  return {mae,precision,recall};
 }
 function historicalPoint(group,offset,filters) {
   return aggregatePoint(group,[offset],pointAt(offset).split('/').map(Number),filters);
@@ -40,7 +39,7 @@ function bookmarkedPoints(favourites) {
   }
   return indexed;
 }
-function query(filters,priority) {
+function query(filters) {
   const favourites=filters.favouritesOnly ? new Set(filters.favouriteKeys || []) : null;
   const bookmarked=bookmarkedPoints(favourites);
   if (favourites && !bookmarked.size) return [];
@@ -72,8 +71,7 @@ function query(filters,priority) {
         if (filters.minimumSeeds>1) continue;
         const score=historicalScore(offset,run);
         if (!matches(score,filters)) continue;
-        if (priority==='aggregate') score.aggregate=checkpointPoints(score.mae,score.f1).aggregate;
-        if (better(score,best.get(group),priority)) best.set(group,historicalPoint(group,offset,filters));
+        if (better(score,best.get(group))) best.set(group,historicalPoint(group,offset,filters));
       } else addPoint(group,pointAt(offset),offset);
     }
   }
@@ -97,7 +95,7 @@ function query(filters,priority) {
         const row=aggregatePoint(group,selected,key.split('/').map(Number),filters);
         if (row.seed_count<Math.max(filters.minimumSeeds || 1,coverage) || !matches(row,filters)) continue;
         if (favourites) {if (favourites.has(row.favourite_key)) savedRows.push(row);}
-        else if (better(row,best.get(group),priority)) best.set(group,row);
+        else if (better(row,best.get(group))) best.set(group,row);
       }
     }
   }
@@ -129,14 +127,14 @@ self.onmessage=async ({data:message})=>{
       alphaValues=message.alphas;scaleValues=message.scales;
       historicalCount=message.count;
       initializeGroups(message.runs,message.records);
-      self.postMessage({type:'ready',groups:groups.length});return;
+      self.postMessage({type:'ready'});return;
     }
     if (message.type==='query') {
       if (!message.filters.source || message.filters.source==='historical') {
         historicalLoad ??= loadHistoricalScores(message.payload);
         await historicalLoad;
       }
-      const rows=query(message.filters,message.priority);
+      const rows=query(message.filters);
       self.postMessage({type:'results',requestId:message.requestId,rows});
     }
   } catch (error) {self.postMessage({type:'error',requestId:message.requestId,message:String(error.message || error)});}

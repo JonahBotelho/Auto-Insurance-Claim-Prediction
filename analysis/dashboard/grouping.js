@@ -81,14 +81,8 @@ function matches(row,filters) {
     || (filters.recallMin!==null && row.recall*100<filters.recallMin)
     || (filters.recallMax!==null && row.recall*100>filters.recallMax));
 }
-function better(row,best,priority) {
+function better(row,best) {
   if (!best) return true;
-  if (['aggregate','relative_gain','f1'].includes(priority)) return row[priority]>best[priority]
-    || (row[priority]===best[priority] && row.mae<best.mae);
-  if (priority==='precision') return row.precision>best.precision || (row.precision===best.precision
-    && (row.recall>best.recall || (row.recall===best.recall && row.mae<best.mae)));
-  if (priority==='recall') return row.recall>best.recall || (row.recall===best.recall
-    && (row.precision>best.precision || (row.precision===best.precision && row.mae<best.mae)));
   return row.mae<best.mae || (row.mae===best.mae && (row.precision>best.precision
     || (row.precision===best.precision && row.recall>best.recall)));
 }

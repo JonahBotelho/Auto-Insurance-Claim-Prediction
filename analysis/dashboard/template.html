@@ -9,11 +9,7 @@
 <body>
 <header class="masthead"><div class="brand">COMP4983 <span>/ Claim experiments</span></div><span class="local-label">Local dataset</span></header>
 <main>
-<section class="intro">
-<div><h1>Model run explorer</h1><p>Compare holdout results and inspect the settings behind each run.</p></div>
-<button id="download" class="primary" disabled>Export current results</button>
-</section>
-<p class="table-note">Historical experiments, both three-seed searches, the five-seed rerun, fresh historical evaluations, and checkpoint 2 submissions in one explorer.</p>
+<h1>Model run explorer</h1>
 <div class="dataset-summary" id="datasetSummary"></div>
 <section class="panel filters" aria-labelledby="filterTitle">
 <div class="section-line"><h2 id="filterTitle">Filter results</h2><button id="reset" class="text-button">Clear filters</button></div>
@@ -32,13 +28,7 @@
 <p id="favouriteStatus" class="storage-notice" role="status" hidden></p>
 <p id="filterError" class="error" role="alert" hidden></p>
 </section>
-<section class="panel results" aria-labelledby="resultsTitle">
-<div class="results-toolbar"><div><h2 id="resultsTitle">Settings groups</h2><p id="resultCount" role="status" aria-live="polite">Loading saved configurations...</p></div><label class="configuration-choice">Choose operating point per settings group<select id="priority"><option value="mae">Lowest matching mean MAE</option><option value="precision">Highest matching precision</option><option value="recall">Highest matching recall</option><option value="f1">Highest matching mean F1</option><option value="aggregate">Highest aggregate points</option><option value="relative_gain">Highest MAE improvement</option></select></label></div>
-<p class="table-note">Matching settings are averaged across distinct seeds at the same threshold, Ridge alpha and multiplier. Duplicate seed observations count once; every source is retained. Filters apply before ranking. Seed coverage can differ between points; use minimum seeds or maximum shared coverage for stricter comparisons. Each checkpoint 2 submission keeps its own row. The five-seed rerun source shows all selected fixed operating points.</p>
-<p class="table-note"><strong>Mean MAE</strong> averages the holdout MAE for each seed. <strong>Lowest seed MAE</strong> is the lowest saved holdout MAE among the seeds included in the result. <strong>All-zero mean MAE</strong> predicts zero everywhere on the same rows. <strong>MAE reduction</strong> is all-zero mean MAE minus mean MAE; positive is better. Improvement averages the per-seed percentage reductions.</p>
-<p class="table-note"><strong>Mean F1</strong> averages each distinct seed's claim F1: 2 × precision × recall / (precision + recall), or 0 when both are zero. Higher is better (0–1); it measures claim detection, not amount accuracy.</p>
-<p class="table-note"><strong>Claim F1 tuning (500 runs)</strong> shows all 500 cutoffs scored on seeds 41–45. Choose another study or <strong>All sources</strong> to compare earlier results.</p>
-<p class="table-note"><strong>Aggregate points (out of 100)</strong> compare mean holdout MAE and mean F1 with the 50 checkpoint 1 submissions. A value halfway between two checkpoint values earns the average of their points. Each metric earns 1–50 points, rounded to two decimals before the two scores are added.</p>
+<section class="panel results" aria-label="Model results">
 <div class="table-scroll">
 <table id="runTable">
 <thead><tr>
@@ -49,22 +39,17 @@
 <th aria-sort="ascending"><button data-sort="mae">Mean MAE <span>▲</span></button></th>
 <th aria-sort="none"><button data-sort="min_mae">Lowest seed MAE <span></span></button></th>
 <th aria-sort="none"><button data-sort="baseline_mae">All-zero mean MAE <span></span></button></th>
-<th aria-sort="none"><button data-sort="mae_difference">MAE reduction <span></span></button></th>
 <th aria-sort="none"><button data-sort="relative_gain">Improvement <span></span></button></th>
 <th aria-sort="none"><button data-sort="precision">Precision <span></span></button></th>
 <th aria-sort="none"><button data-sort="recall">Recall <span></span></button></th>
 <th aria-sort="none"><button data-sort="f1">Mean F1 <span></span></button></th>
 <th aria-sort="none"><button data-sort="aggregate">Aggregate points <span></span></button></th>
-<th aria-sort="none"><button data-sort="threshold">Threshold <span></span></button></th>
-<th aria-sort="none"><button data-sort="tp">Mean TP <span></span></button></th>
-<th aria-sort="none"><button data-sort="fp">Mean FP <span></span></button></th>
-<th aria-sort="none"><button data-sort="oversampling_percent">Oversampling % <span></span></button></th>
 <th>Settings</th>
 </tr></thead>
-<tbody id="tableBody"><tr><td colspan="18" class="empty">Loading saved configurations...</td></tr></tbody>
+<tbody id="tableBody"><tr><td colspan="13" class="empty">Loading saved configurations...</td></tr></tbody>
 </table>
 </div>
-<div class="pagination"><label>Rows per page<select id="pageSize"><option>25</option><option selected>50</option><option>100</option><option value="all">All</option></select></label><span id="pageInfo"></span><div><button id="previous">Previous</button><button id="next">Next</button></div></div>
+<div class="pagination"><label>Rows per page<select id="pageSize"><option>25</option><option selected>50</option><option>100</option><option value="all">All</option></select></label><span id="pageInfo" role="status"></span><div><button id="previous">Previous</button><button id="next">Next</button></div></div>
 </section>
 <details class="coverage"><summary>Dataset coverage, source downloads, and interpretation</summary><p>The original 1,000 classifier fits retained only scores with precision above 45%, MAE below 100 and recall above 20%. Fresh evaluations fill recoverable gaps using current code and seeds 41–43; the discarded historical measurements remain unavailable. Search studies retain selected operating points; full prediction caches and fresh score grids remain in analysis/output. Original source payloads are archived with SHA-256 checksums in analysis/output/dashboard_sources.</p><p>Checkpoint 2 uses its documented five 25% holdouts, seeds 42–46. Compare matching splits and seeds; inspected holdouts are exploratory.</p><div class="config-actions" id="sourceDownloads"></div></details>
 </main>

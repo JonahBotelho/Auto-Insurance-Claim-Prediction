@@ -79,31 +79,26 @@ function query() {
   try {
     const filters = readFilters();
     elements.filterError.hidden = true;
-    elements.resultCount.textContent = "Finding matching configurations...";
-    const request = {type:"query",filters,priority:elements.priority.value,requestId:++requestId};
+    const request = {type:"query",filters,requestId:++requestId};
     if (!historicalRequested && (!filters.source || filters.source === "historical")) {
       request.payload = elements["score-data"].textContent.trim();
       historicalRequested = true;
     }
     worker.postMessage(request);
   } catch (error) {
-    requestId++; showError(error.message); elements.download.disabled = true;
-    elements.resultCount.textContent = "Fix the invalid filters to update results.";
+    requestId++; showError(error.message);
   }
 }
 function queueQuery() { clearTimeout(debounce); debounce = setTimeout(query,150); }
 worker.onmessage = ({data: message}) => {
   if (message.type === "ready") {
-    ready = true; elements.download.disabled = false;
-    const summary = document.createElement("span"); summary.textContent = numbers.format(message.groups) + " settings groups";
-    elements.datasetSummary.append(summary);
+    ready = true;
     URL.revokeObjectURL(workerUrl); query();
   } else if (message.type === "results" && message.requestId === requestId) {
     rows = message.rows;
     page = 0; orderRows(); render();
   } else if (message.type === "error" && (message.requestId === undefined || message.requestId === requestId)) {
     showError(message.message);
-    elements.resultCount.textContent = "Unable to load matching configurations.";
   }
 };
 worker.onerror = event => showError("Unable to load the local score data. Use a current Chrome or Edge browser. " + event.message);
@@ -126,12 +121,14 @@ function cell(text, className = "") {
   const element = document.createElement("td");
   element.textContent = text; element.className = className; return element;
 }
+function shortRunLabel(label) {
+  return label.replace(/^LightGBM extended claim history \((no|\d+%) oversampling\)$/,
+    (_, rate) => `LGBM ${rate === "no" ? "0%" : rate} oversamp.`)
+    .replace(/^Claim history tune /, "History tune ")
+    .replace(/^(Five-seed R\d+) \u00b7 .+$/, "$1");
+}
 function render() {
   if (elements.pageSize.value === "all") pageSize = Math.max(1, rows.length);
-  const scored = rows.filter(row => row.hasMetrics).length;
-  const countLabel = elements.source.value === f1Study ? " matching runs / " : " matching settings groups / ";
-  elements.resultCount.textContent = numbers.format(rows.length) + (elements.favouritesOnly.checked ? " favourited results / " : countLabel)
-    + numbers.format(scored) + " scored / " + numbers.format(rows.length-scored) + " without saved metrics";
   elements.tableBody.replaceChildren();
   const maximumPage = Math.max(0,Math.ceil(rows.length/pageSize)-1);
   page = Math.min(page,maximumPage);
@@ -139,32 +136,37 @@ function render() {
   for (const row of rows.slice(start,start+pageSize)) {
     const tr = document.createElement("tr"); tr.dataset.run = row.fit_id;
     const favourite = cell("", "favourite-cell"); favourite.append(favouriteButton(row));
-    const id = cell(row.labels.slice(0,3).join(", ")+(row.labels.length>3 ? " +"+(row.labels.length-3) : ""), "run-label");
+    const id = cell("", "run-label");
     id.title = row.labels.join(", ");
+    const label = document.createElement("span");
+    label.className = "run-label-text";
+    label.textContent = row.labels.slice(0,3).map(shortRunLabel).join(", ");
+    if (row.labels.length > 3) label.textContent += " +" + (row.labels.length - 3);
+    id.append(label);
     const sourceNote=document.createElement('span');sourceNote.className='availability';
     sourceNote.textContent=row.source_ids.join(' / ');id.append(sourceNote);
     if (row.status) {
       const note = document.createElement("span");
       note.className = "availability";
-      note.textContent = row.status + " / " + (row.name || "Historical fit"); id.append(note);
+      const name = row.name || "Historical fit";
+      note.textContent = row.labels.includes(name) ? row.status : row.status + " / " + shortRunLabel(name);
+      id.append(note);
     }
     if (!row.hasMetrics) {
       const note = document.createElement("span");
       note.className = "availability"; note.textContent = "No saved qualifying metrics"; id.append(note);
     }
     tr.append(favourite,id,cell(row.evaluation_percent + "%"),cell(row.hasMetrics ? row.seed_count + " (" + row.seeds.join(", ") + ")" : "—"));
-    for (const name of ["mae","min_mae","baseline_mae","mae_difference","relative_gain","precision","recall","f1","aggregate","threshold"]) {
+    for (const name of ["mae","min_mae","baseline_mae","relative_gain","precision","recall","f1","aggregate"]) {
       const value = row[name];
       const isPercent = ["precision","recall","relative_gain"].includes(name);
       const display = missing(value) ? String.fromCharCode(8212) : name === "aggregate" ? decimal(value,2)
-        : isPercent ? percent(value) : decimal(value,name === "threshold" ? 3 : 4);
+        : isPercent ? percent(value) : decimal(value);
       const td = cell(display, missing(value) ? "missing" : "score" + (name === sortKey ? " metric-primary" : ""));
       if (!missing(value)) td.title = String(isPercent ? value * 100 : value);
       if (name === "aggregate" && row.hasMetrics) td.title = decimal(row.mae_points,2) + " MAE points + " + decimal(row.f1_points,2) + " F1 points";
       tr.append(td);
     }
-    tr.append(cell(row.hasMetrics ? numbers.format(row.tp) : String.fromCharCode(8212)),
-      cell(row.hasMetrics ? numbers.format(row.fp) : String.fromCharCode(8212)),cell(row.settings.oversampling!=null ? row.settings.oversampling + "%" : "Blend"));
     const action = cell(""), button = document.createElement("button");
     button.className = "view-button"; button.dataset.openRun = row.fit_id; button.textContent = "View";
     button.setAttribute("aria-label","View settings for run " + row.fit_id);
@@ -174,41 +176,29 @@ function render() {
     const message = elements.favouritesOnly.checked ? "No favourites match these filters. Star a row or widen the filters."
       : "No saved configurations match these filters. Clear or widen the filters.";
     const tr = document.createElement("tr"), td = cell(message,"empty");
-    td.colSpan = 18; tr.append(td); fragment.append(tr);
+    td.colSpan = 13; tr.append(td); fragment.append(tr);
   }
   elements.tableBody.append(fragment);
   elements.pageInfo.textContent = rows.length ? numbers.format(start+1) + "-" + numbers.format(Math.min(start+pageSize,rows.length)) + " of " + numbers.format(rows.length) : "0 results";
   elements.previous.disabled = page === 0; elements.next.disabled = page >= maximumPage;
-  elements.download.disabled = !ready || rows.length === 0;
 }
 function openRun(id) {
   const row = rows.find(item => item.fit_id === id);
   if (row) showRunDetails(row);
-}
-function exportCsv() {
-  const fields = ["labels","source_ids","run_ids","seed_count","seeds","status","name","severity_method","evaluation_percent","mean_mae","min_mae","all_zero_mean_mae","mae_difference","relative_gain","precision","recall","f1","aggregate","mae_points","f1_points","threshold","alpha","scale","tp","fp",
-    "max_iter","learning_rate","max_leaf_nodes","min_samples_leaf","l2_regularization","oversampling_percent","smoothing","hasMetrics"];
-  const lines = [fields.join(",")];
-  const escape = value => '"' + String(Array.isArray(value) ? value.join(';') : value).replaceAll('"','""') + '"';
-  for (const row of rows) lines.push(fields.map(key => missing(row[key]) ? "" : escape(row[key])).join(","));
-  const url = URL.createObjectURL(new Blob([lines.join("\r\n")],{type:"text/csv;charset=utf-8"}));
-  const link = document.createElement("a"); link.href = url; link.download = "filtered_model_runs.csv"; link.click();
-  setTimeout(() => URL.revokeObjectURL(url),1000);
 }
 for (const key of [...metricInputs,"runId"]) elements[key].addEventListener("input",queueQuery);
 elements.evaluation.addEventListener("change",query); elements.seed.addEventListener("change",query);
 elements.minimumSeeds.addEventListener("change",query);
 elements.coverage.addEventListener("change",query);
 elements.includeMissing.addEventListener("change",query);
-function setPriority(key) {
-  elements.priority.value = sortKey = key;
+function setSort(key) {
+  sortKey = key;
   sortDirection = key === "mae" ? 1 : -1;
 }
-elements.priority.addEventListener("change",() => {setPriority(elements.priority.value); query();});
 elements.reset.addEventListener("click",() => {
   for (const key of [...metricInputs,"runId"]) elements[key].value = "";
   elements.evaluation.value = ""; elements.seed.value = ""; elements.minimumSeeds.value = "1"; elements.source.value=defaultSource; elements.coverage.value="available"; elements.includeMissing.checked = true; elements.favouritesOnly.checked = false;
-  setPriority("mae"); query();
+  setSort("mae"); query();
 });
 elements.previousLimits.addEventListener("click",() => {
   for (const key of metricInputs) elements[key].value = "";
@@ -216,7 +206,7 @@ elements.previousLimits.addEventListener("click",() => {
 });
 for (const button of document.querySelectorAll("[data-sort]")) button.addEventListener("click",() => {
   const key = button.dataset.sort;
-  sortDirection = key === sortKey ? -sortDirection : ["precision","recall","f1","tp","mae_difference","relative_gain","seed_count","aggregate"].includes(key) ? -1 : 1;
+  sortDirection = key === sortKey ? -sortDirection : ["precision","recall","f1","relative_gain","seed_count","aggregate"].includes(key) ? -1 : 1;
   sortKey = key; page = 0; orderRows(); render();
 });
 elements.pageSize.addEventListener("change",() => {
@@ -233,4 +223,3 @@ elements.closeDialog.addEventListener("click",() => elements.runDialog.close());
 setupReproductionActions();
 setupSourceActions();
 setupFavourites();
-elements.download.addEventListener("click",exportCsv);

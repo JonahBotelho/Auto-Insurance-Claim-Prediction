@@ -16,10 +16,9 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
 .masthead{background:#162334;color:white;padding:17px 4%;display:flex;justify-content:space-between;align-items:center}
 .brand{font-weight:700;letter-spacing:.02em}.brand span{font-weight:400;color:#b8c5d5;margin-left:8px}.local-label{color:#c5d1df;font-size:12px}
 main{max-width:1600px;margin:0 auto;padding:34px 4% 36px}
-.intro{display:flex;justify-content:space-between;align-items:center;gap:24px;margin-bottom:22px}
-h1{font-size:32px;letter-spacing:-.035em;margin:0 0 8px;font-weight:650}
+h1{font-size:32px;letter-spacing:-.035em;margin:0 0 22px;font-weight:650}
 h2{font-size:16px;margin:0;font-weight:650}
-p{line-height:1.55}.intro p{margin:0;color:var(--muted)}
+p{line-height:1.55}
 .primary{background:var(--blue);border-color:var(--blue);color:white}.primary:hover{background:#174bbd;color:white}
 .dataset-summary{display:flex;flex-wrap:wrap;gap:8px 24px;color:var(--muted);margin-bottom:21px}
 .dataset-summary strong{color:var(--ink);font-weight:650}
@@ -41,10 +40,9 @@ select{margin-top:5px;width:100%}.select-field{padding-top:1px}.select-field>lab
 .favourite-cell{text-align:center;padding:0 8px}
 .favourite-button{font-size:23px;line-height:1;padding:6px 8px;color:#64748b}
 .favourite-button[aria-pressed=true]{color:#946200;background:#fff5d6;border-color:#e5c46a}
-.results-toolbar{display:flex;justify-content:space-between;align-items:center;gap:20px;padding:20px 22px 8px}.results-toolbar p{margin:5px 0 0;font-size:12px;color:var(--muted)}
-.configuration-choice{display:flex;align-items:center;gap:12px;white-space:nowrap}.configuration-choice select{width:220px;margin:0}
 .table-note{margin:6px 22px 16px;font-size:12px;color:var(--muted)}
-.table-scroll{overflow:auto;max-height:620px;min-height:260px}
+.table-scroll{overflow:auto;max-height:775px;min-height:260px}
+.results > .table-scroll{border-radius:11px 11px 0 0}
 .detail-panel .table-scroll{min-height:0;max-height:260px}
 table{width:100%;border-collapse:separate;border-spacing:0;font-variant-numeric:tabular-nums;white-space:nowrap}
 thead{position:sticky;top:0;z-index:2}th{background:#f6f8fb;text-align:right;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:0 12px;height:44px;font-size:12px;color:#48576b}
@@ -58,6 +56,7 @@ td:first-child{font-weight:650;color:#233d67}.score{font-weight:650}.metric-prim
 #runTable .favourite-cell{text-align:center;padding:8px}
 #runTable th:nth-child(2){text-align:left}
 .run-label{font-weight:650;color:#233d67;text-align:left}
+.run-label-text{display:block;max-width:155px;white-space:normal;overflow-wrap:anywhere}
 .availability{display:block;font-size:11px;color:#7c8796;white-space:normal;max-width:155px;margin-top:3px;line-height:1.3;text-align:left}
 .view-button{font-size:12px;color:var(--blue);padding:5px 9px;border-color:#dbe4f3}
 .empty{text-align:center!important;padding:50px 20px!important;color:var(--muted)}
@@ -95,19 +94,15 @@ dl{display:grid;grid-template-columns:minmax(140px,.8fr) minmax(0,1.2fr);margin:
 #oofValues{white-space:pre-wrap;overflow-wrap:anywhere;background:#f8fafc;font-size:11px;padding:14px;margin:0 16px 16px;border-radius:6px}
 .visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}.clipboard-buffer{position:fixed;opacity:0;pointer-events:none}
 @media(max-width:620px){dialog{padding:0}.dialog-heading{padding:16px}.dialog-body{padding:16px}.result-metrics{gap:7px}.result-metrics>div{padding:11px 9px}.result-metrics strong{font-size:clamp(16px,4.8vw,21px)}.result-metrics span{font-size:10px}.reproduction-panel{padding:14px}.reproduction-heading{align-items:flex-start;flex-direction:column;gap:8px}.command-box{flex-direction:column}.step-toolbar{align-items:flex-start;flex-direction:column;gap:9px}.prompt-values{grid-template-columns:1fr}.prompt-values li{padding-top:8px;padding-bottom:8px}dl{grid-template-columns:1fr 1fr;gap:10px}#analysisSetup{margin-left:0}}
-@media(min-width:1500px){.table-scroll{max-height:calc(100vh - 460px)}}
-@media(max-width:1050px){.filter-grid{grid-template-columns:repeat(3,1fr)}.select-field{grid-column:auto}.configuration-choice{display:block}.configuration-choice select{display:block;margin-top:5px}}
-@media(max-width:620px){main{padding:25px 16px}.masthead{padding:15px 16px}.local-label{display:none}.brand span{font-size:12px}.intro{align-items:flex-start;flex-direction:column;gap:15px}h1{font-size:28px}.filters{padding:18px 16px}.filter-grid{grid-template-columns:1fr;gap:16px}.range label{width:50%}.filter-bottom{align-items:flex-start;flex-direction:column;gap:14px}.results-toolbar{padding:18px 16px 8px;align-items:flex-start;flex-direction:column}.configuration-choice{width:100%}.configuration-choice select{width:100%}.table-note{margin-left:16px;margin-right:16px}.pagination{padding:12px;flex-wrap:wrap;gap:12px}.table-scroll{max-height:500px}.pagination #pageInfo{order:3;width:100%;text-align:center}.dataset-summary{gap:6px 16px}dl{font-size:12px}}
+@media(min-width:1500px){.table-scroll{max-height:calc((100vh - 460px) * 1.25)}}
+@media(max-width:1050px){.filter-grid{grid-template-columns:repeat(3,1fr)}.select-field{grid-column:auto}}
+@media(max-width:620px){main{padding:25px 16px}.masthead{padding:15px 16px}.local-label{display:none}.brand span{font-size:12px}h1{font-size:28px}.filters{padding:18px 16px}.filter-grid{grid-template-columns:1fr;gap:16px}.range label{width:50%}.filter-bottom{align-items:flex-start;flex-direction:column;gap:14px}.table-note{margin-left:16px;margin-right:16px}.pagination{padding:12px;flex-wrap:wrap;gap:12px}.table-scroll{max-height:625px}.pagination #pageInfo{order:3;width:100%;text-align:center}.dataset-summary{gap:6px 16px}dl{font-size:12px}}
 </style>
 </head>
 <body>
 <header class="masthead"><div class="brand">COMP4983 <span>/ Claim experiments</span></div><span class="local-label">Local dataset</span></header>
 <main>
-<section class="intro">
-<div><h1>Model run explorer</h1><p>Compare holdout results and inspect the settings behind each run.</p></div>
-<button id="download" class="primary" disabled>Export current results</button>
-</section>
-<p class="table-note">Historical experiments, both three-seed searches, the five-seed rerun, fresh historical evaluations, and checkpoint 2 submissions in one explorer.</p>
+<h1>Model run explorer</h1>
 <div class="dataset-summary" id="datasetSummary"></div>
 <section class="panel filters" aria-labelledby="filterTitle">
 <div class="section-line"><h2 id="filterTitle">Filter results</h2><button id="reset" class="text-button">Clear filters</button></div>
@@ -126,13 +121,7 @@ dl{display:grid;grid-template-columns:minmax(140px,.8fr) minmax(0,1.2fr);margin:
 <p id="favouriteStatus" class="storage-notice" role="status" hidden></p>
 <p id="filterError" class="error" role="alert" hidden></p>
 </section>
-<section class="panel results" aria-labelledby="resultsTitle">
-<div class="results-toolbar"><div><h2 id="resultsTitle">Settings groups</h2><p id="resultCount" role="status" aria-live="polite">Loading saved configurations...</p></div><label class="configuration-choice">Choose operating point per settings group<select id="priority"><option value="mae">Lowest matching mean MAE</option><option value="precision">Highest matching precision</option><option value="recall">Highest matching recall</option><option value="f1">Highest matching mean F1</option><option value="aggregate">Highest aggregate points</option><option value="relative_gain">Highest MAE improvement</option></select></label></div>
-<p class="table-note">Matching settings are averaged across distinct seeds at the same threshold, Ridge alpha and multiplier. Duplicate seed observations count once; every source is retained. Filters apply before ranking. Seed coverage can differ between points; use minimum seeds or maximum shared coverage for stricter comparisons. Each checkpoint 2 submission keeps its own row. The five-seed rerun source shows all selected fixed operating points.</p>
-<p class="table-note"><strong>Mean MAE</strong> averages the holdout MAE for each seed. <strong>Lowest seed MAE</strong> is the lowest saved holdout MAE among the seeds included in the result. <strong>All-zero mean MAE</strong> predicts zero everywhere on the same rows. <strong>MAE reduction</strong> is all-zero mean MAE minus mean MAE; positive is better. Improvement averages the per-seed percentage reductions.</p>
-<p class="table-note"><strong>Mean F1</strong> averages each distinct seed's claim F1: 2 × precision × recall / (precision + recall), or 0 when both are zero. Higher is better (0–1); it measures claim detection, not amount accuracy.</p>
-<p class="table-note"><strong>Claim F1 tuning (500 runs)</strong> shows all 500 cutoffs scored on seeds 41–45. Choose another study or <strong>All sources</strong> to compare earlier results.</p>
-<p class="table-note"><strong>Aggregate points (out of 100)</strong> compare mean holdout MAE and mean F1 with the 50 checkpoint 1 submissions. A value halfway between two checkpoint values earns the average of their points. Each metric earns 1–50 points, rounded to two decimals before the two scores are added.</p>
+<section class="panel results" aria-label="Model results">
 <div class="table-scroll">
 <table id="runTable">
 <thead><tr>
@@ -143,22 +132,17 @@ dl{display:grid;grid-template-columns:minmax(140px,.8fr) minmax(0,1.2fr);margin:
 <th aria-sort="ascending"><button data-sort="mae">Mean MAE <span>▲</span></button></th>
 <th aria-sort="none"><button data-sort="min_mae">Lowest seed MAE <span></span></button></th>
 <th aria-sort="none"><button data-sort="baseline_mae">All-zero mean MAE <span></span></button></th>
-<th aria-sort="none"><button data-sort="mae_difference">MAE reduction <span></span></button></th>
 <th aria-sort="none"><button data-sort="relative_gain">Improvement <span></span></button></th>
 <th aria-sort="none"><button data-sort="precision">Precision <span></span></button></th>
 <th aria-sort="none"><button data-sort="recall">Recall <span></span></button></th>
 <th aria-sort="none"><button data-sort="f1">Mean F1 <span></span></button></th>
 <th aria-sort="none"><button data-sort="aggregate">Aggregate points <span></span></button></th>
-<th aria-sort="none"><button data-sort="threshold">Threshold <span></span></button></th>
-<th aria-sort="none"><button data-sort="tp">Mean TP <span></span></button></th>
-<th aria-sort="none"><button data-sort="fp">Mean FP <span></span></button></th>
-<th aria-sort="none"><button data-sort="oversampling_percent">Oversampling % <span></span></button></th>
 <th>Settings</th>
 </tr></thead>
-<tbody id="tableBody"><tr><td colspan="18" class="empty">Loading saved configurations...</td></tr></tbody>
+<tbody id="tableBody"><tr><td colspan="13" class="empty">Loading saved configurations...</td></tr></tbody>
 </table>
 </div>
-<div class="pagination"><label>Rows per page<select id="pageSize"><option>25</option><option selected>50</option><option>100</option><option value="all">All</option></select></label><span id="pageInfo"></span><div><button id="previous">Previous</button><button id="next">Next</button></div></div>
+<div class="pagination"><label>Rows per page<select id="pageSize"><option>25</option><option selected>50</option><option>100</option><option value="all">All</option></select></label><span id="pageInfo" role="status"></span><div><button id="previous">Previous</button><button id="next">Next</button></div></div>
 </section>
 <details class="coverage"><summary>Dataset coverage, source downloads, and interpretation</summary><p>The original 1,000 classifier fits retained only scores with precision above 45%, MAE below 100 and recall above 20%. Fresh evaluations fill recoverable gaps using current code and seeds 41–43; the discarded historical measurements remain unavailable. Search studies retain selected operating points; full prediction caches and fresh score grids remain in analysis/output. Original source payloads are archived with SHA-256 checksums in analysis/output/dashboard_sources.</p><p>Checkpoint 2 uses its documented five 25% holdouts, seeds 42–46. Compare matching splits and seeds; inspected holdouts are exploratory.</p><div class="config-actions" id="sourceDownloads"></div></details>
 </main>
@@ -345,14 +329,8 @@ function matches(row,filters) {
     || (filters.recallMin!==null && row.recall*100<filters.recallMin)
     || (filters.recallMax!==null && row.recall*100>filters.recallMax));
 }
-function better(row,best,priority) {
+function better(row,best) {
   if (!best) return true;
-  if (['aggregate','relative_gain','f1'].includes(priority)) return row[priority]>best[priority]
-    || (row[priority]===best[priority] && row.mae<best.mae);
-  if (priority==='precision') return row.precision>best.precision || (row.precision===best.precision
-    && (row.recall>best.recall || (row.recall===best.recall && row.mae<best.mae)));
-  if (priority==='recall') return row.recall>best.recall || (row.recall===best.recall
-    && (row.precision>best.precision || (row.precision===best.precision && row.mae<best.mae)));
   return row.mae<best.mae || (row.mae===best.mae && (row.precision>best.precision
     || (row.precision===best.precision && row.recall>best.recall)));
 }
@@ -363,8 +341,7 @@ function allowedSeed(seed,filters) {return filters.seed===null || filters.seed==
 function historicalScore(offset,run) {
   const tp=data.getUint16(offset+6,true),fp=data.getUint16(offset+8,true),mae=data.getFloat64(offset+10,true);
   const precision=tp+fp ? tp/(tp+fp) : 0,recall=tp/run.claims;
-  const f1=precision+recall ? 2*precision*recall/(precision+recall) : 0;
-  return {mae,precision,recall,f1,relative_gain:1-mae/run.zero_mae};
+  return {mae,precision,recall};
 }
 function historicalPoint(group,offset,filters) {
   return aggregatePoint(group,[offset],pointAt(offset).split('/').map(Number),filters);
@@ -399,7 +376,7 @@ function bookmarkedPoints(favourites) {
   }
   return indexed;
 }
-function query(filters,priority) {
+function query(filters) {
   const favourites=filters.favouritesOnly ? new Set(filters.favouriteKeys || []) : null;
   const bookmarked=bookmarkedPoints(favourites);
   if (favourites && !bookmarked.size) return [];
@@ -431,8 +408,7 @@ function query(filters,priority) {
         if (filters.minimumSeeds>1) continue;
         const score=historicalScore(offset,run);
         if (!matches(score,filters)) continue;
-        if (priority==='aggregate') score.aggregate=checkpointPoints(score.mae,score.f1).aggregate;
-        if (better(score,best.get(group),priority)) best.set(group,historicalPoint(group,offset,filters));
+        if (better(score,best.get(group))) best.set(group,historicalPoint(group,offset,filters));
       } else addPoint(group,pointAt(offset),offset);
     }
   }
@@ -456,7 +432,7 @@ function query(filters,priority) {
         const row=aggregatePoint(group,selected,key.split('/').map(Number),filters);
         if (row.seed_count<Math.max(filters.minimumSeeds || 1,coverage) || !matches(row,filters)) continue;
         if (favourites) {if (favourites.has(row.favourite_key)) savedRows.push(row);}
-        else if (better(row,best.get(group),priority)) best.set(group,row);
+        else if (better(row,best.get(group))) best.set(group,row);
       }
     }
   }
@@ -488,14 +464,14 @@ self.onmessage=async ({data:message})=>{
       alphaValues=message.alphas;scaleValues=message.scales;
       historicalCount=message.count;
       initializeGroups(message.runs,message.records);
-      self.postMessage({type:'ready',groups:groups.length});return;
+      self.postMessage({type:'ready'});return;
     }
     if (message.type==='query') {
       if (!message.filters.source || message.filters.source==='historical') {
         historicalLoad ??= loadHistoricalScores(message.payload);
         await historicalLoad;
       }
-      const rows=query(message.filters,message.priority);
+      const rows=query(message.filters);
       self.postMessage({type:'results',requestId:message.requestId,rows});
     }
   } catch (error) {self.postMessage({type:'error',requestId:message.requestId,message:String(error.message || error)});}
@@ -720,9 +696,9 @@ function setupSourceActions() {
   button('Archive checksums',()=>downloadPayload('dashboard-source-manifest.json',unified.archive_manifest));
   const requested=new URLSearchParams(location.search).get('source');
   elements.source.value=[...elements.source.options].some(option=>option.value===requested) ? requested : defaultSource;
-  if (elements.source.value===f1Study) setPriority('f1');
+  if (elements.source.value===f1Study) setSort('f1');
   elements.source.addEventListener('change',()=>{
-    if (elements.source.value===f1Study) setPriority('f1');
+    if (elements.source.value===f1Study) setSort('f1');
     query();
   });
 }</script>
@@ -856,31 +832,26 @@ function query() {
   try {
     const filters = readFilters();
     elements.filterError.hidden = true;
-    elements.resultCount.textContent = "Finding matching configurations...";
-    const request = {type:"query",filters,priority:elements.priority.value,requestId:++requestId};
+    const request = {type:"query",filters,requestId:++requestId};
     if (!historicalRequested && (!filters.source || filters.source === "historical")) {
       request.payload = elements["score-data"].textContent.trim();
       historicalRequested = true;
     }
     worker.postMessage(request);
   } catch (error) {
-    requestId++; showError(error.message); elements.download.disabled = true;
-    elements.resultCount.textContent = "Fix the invalid filters to update results.";
+    requestId++; showError(error.message);
   }
 }
 function queueQuery() { clearTimeout(debounce); debounce = setTimeout(query,150); }
 worker.onmessage = ({data: message}) => {
   if (message.type === "ready") {
-    ready = true; elements.download.disabled = false;
-    const summary = document.createElement("span"); summary.textContent = numbers.format(message.groups) + " settings groups";
-    elements.datasetSummary.append(summary);
+    ready = true;
     URL.revokeObjectURL(workerUrl); query();
   } else if (message.type === "results" && message.requestId === requestId) {
     rows = message.rows;
     page = 0; orderRows(); render();
   } else if (message.type === "error" && (message.requestId === undefined || message.requestId === requestId)) {
     showError(message.message);
-    elements.resultCount.textContent = "Unable to load matching configurations.";
   }
 };
 worker.onerror = event => showError("Unable to load the local score data. Use a current Chrome or Edge browser. " + event.message);
@@ -903,12 +874,14 @@ function cell(text, className = "") {
   const element = document.createElement("td");
   element.textContent = text; element.className = className; return element;
 }
+function shortRunLabel(label) {
+  return label.replace(/^LightGBM extended claim history \((no|\d+%) oversampling\)$/,
+    (_, rate) => `LGBM ${rate === "no" ? "0%" : rate} oversamp.`)
+    .replace(/^Claim history tune /, "History tune ")
+    .replace(/^(Five-seed R\d+) \u00b7 .+$/, "$1");
+}
 function render() {
   if (elements.pageSize.value === "all") pageSize = Math.max(1, rows.length);
-  const scored = rows.filter(row => row.hasMetrics).length;
-  const countLabel = elements.source.value === f1Study ? " matching runs / " : " matching settings groups / ";
-  elements.resultCount.textContent = numbers.format(rows.length) + (elements.favouritesOnly.checked ? " favourited results / " : countLabel)
-    + numbers.format(scored) + " scored / " + numbers.format(rows.length-scored) + " without saved metrics";
   elements.tableBody.replaceChildren();
   const maximumPage = Math.max(0,Math.ceil(rows.length/pageSize)-1);
   page = Math.min(page,maximumPage);
@@ -916,32 +889,37 @@ function render() {
   for (const row of rows.slice(start,start+pageSize)) {
     const tr = document.createElement("tr"); tr.dataset.run = row.fit_id;
     const favourite = cell("", "favourite-cell"); favourite.append(favouriteButton(row));
-    const id = cell(row.labels.slice(0,3).join(", ")+(row.labels.length>3 ? " +"+(row.labels.length-3) : ""), "run-label");
+    const id = cell("", "run-label");
     id.title = row.labels.join(", ");
+    const label = document.createElement("span");
+    label.className = "run-label-text";
+    label.textContent = row.labels.slice(0,3).map(shortRunLabel).join(", ");
+    if (row.labels.length > 3) label.textContent += " +" + (row.labels.length - 3);
+    id.append(label);
     const sourceNote=document.createElement('span');sourceNote.className='availability';
     sourceNote.textContent=row.source_ids.join(' / ');id.append(sourceNote);
     if (row.status) {
       const note = document.createElement("span");
       note.className = "availability";
-      note.textContent = row.status + " / " + (row.name || "Historical fit"); id.append(note);
+      const name = row.name || "Historical fit";
+      note.textContent = row.labels.includes(name) ? row.status : row.status + " / " + shortRunLabel(name);
+      id.append(note);
     }
     if (!row.hasMetrics) {
       const note = document.createElement("span");
       note.className = "availability"; note.textContent = "No saved qualifying metrics"; id.append(note);
     }
     tr.append(favourite,id,cell(row.evaluation_percent + "%"),cell(row.hasMetrics ? row.seed_count + " (" + row.seeds.join(", ") + ")" : "—"));
-    for (const name of ["mae","min_mae","baseline_mae","mae_difference","relative_gain","precision","recall","f1","aggregate","threshold"]) {
+    for (const name of ["mae","min_mae","baseline_mae","relative_gain","precision","recall","f1","aggregate"]) {
       const value = row[name];
       const isPercent = ["precision","recall","relative_gain"].includes(name);
       const display = missing(value) ? String.fromCharCode(8212) : name === "aggregate" ? decimal(value,2)
-        : isPercent ? percent(value) : decimal(value,name === "threshold" ? 3 : 4);
+        : isPercent ? percent(value) : decimal(value);
       const td = cell(display, missing(value) ? "missing" : "score" + (name === sortKey ? " metric-primary" : ""));
       if (!missing(value)) td.title = String(isPercent ? value * 100 : value);
       if (name === "aggregate" && row.hasMetrics) td.title = decimal(row.mae_points,2) + " MAE points + " + decimal(row.f1_points,2) + " F1 points";
       tr.append(td);
     }
-    tr.append(cell(row.hasMetrics ? numbers.format(row.tp) : String.fromCharCode(8212)),
-      cell(row.hasMetrics ? numbers.format(row.fp) : String.fromCharCode(8212)),cell(row.settings.oversampling!=null ? row.settings.oversampling + "%" : "Blend"));
     const action = cell(""), button = document.createElement("button");
     button.className = "view-button"; button.dataset.openRun = row.fit_id; button.textContent = "View";
     button.setAttribute("aria-label","View settings for run " + row.fit_id);
@@ -951,41 +929,29 @@ function render() {
     const message = elements.favouritesOnly.checked ? "No favourites match these filters. Star a row or widen the filters."
       : "No saved configurations match these filters. Clear or widen the filters.";
     const tr = document.createElement("tr"), td = cell(message,"empty");
-    td.colSpan = 18; tr.append(td); fragment.append(tr);
+    td.colSpan = 13; tr.append(td); fragment.append(tr);
   }
   elements.tableBody.append(fragment);
   elements.pageInfo.textContent = rows.length ? numbers.format(start+1) + "-" + numbers.format(Math.min(start+pageSize,rows.length)) + " of " + numbers.format(rows.length) : "0 results";
   elements.previous.disabled = page === 0; elements.next.disabled = page >= maximumPage;
-  elements.download.disabled = !ready || rows.length === 0;
 }
 function openRun(id) {
   const row = rows.find(item => item.fit_id === id);
   if (row) showRunDetails(row);
-}
-function exportCsv() {
-  const fields = ["labels","source_ids","run_ids","seed_count","seeds","status","name","severity_method","evaluation_percent","mean_mae","min_mae","all_zero_mean_mae","mae_difference","relative_gain","precision","recall","f1","aggregate","mae_points","f1_points","threshold","alpha","scale","tp","fp",
-    "max_iter","learning_rate","max_leaf_nodes","min_samples_leaf","l2_regularization","oversampling_percent","smoothing","hasMetrics"];
-  const lines = [fields.join(",")];
-  const escape = value => '"' + String(Array.isArray(value) ? value.join(';') : value).replaceAll('"','""') + '"';
-  for (const row of rows) lines.push(fields.map(key => missing(row[key]) ? "" : escape(row[key])).join(","));
-  const url = URL.createObjectURL(new Blob([lines.join("\r\n")],{type:"text/csv;charset=utf-8"}));
-  const link = document.createElement("a"); link.href = url; link.download = "filtered_model_runs.csv"; link.click();
-  setTimeout(() => URL.revokeObjectURL(url),1000);
 }
 for (const key of [...metricInputs,"runId"]) elements[key].addEventListener("input",queueQuery);
 elements.evaluation.addEventListener("change",query); elements.seed.addEventListener("change",query);
 elements.minimumSeeds.addEventListener("change",query);
 elements.coverage.addEventListener("change",query);
 elements.includeMissing.addEventListener("change",query);
-function setPriority(key) {
-  elements.priority.value = sortKey = key;
+function setSort(key) {
+  sortKey = key;
   sortDirection = key === "mae" ? 1 : -1;
 }
-elements.priority.addEventListener("change",() => {setPriority(elements.priority.value); query();});
 elements.reset.addEventListener("click",() => {
   for (const key of [...metricInputs,"runId"]) elements[key].value = "";
   elements.evaluation.value = ""; elements.seed.value = ""; elements.minimumSeeds.value = "1"; elements.source.value=defaultSource; elements.coverage.value="available"; elements.includeMissing.checked = true; elements.favouritesOnly.checked = false;
-  setPriority("mae"); query();
+  setSort("mae"); query();
 });
 elements.previousLimits.addEventListener("click",() => {
   for (const key of metricInputs) elements[key].value = "";
@@ -993,7 +959,7 @@ elements.previousLimits.addEventListener("click",() => {
 });
 for (const button of document.querySelectorAll("[data-sort]")) button.addEventListener("click",() => {
   const key = button.dataset.sort;
-  sortDirection = key === sortKey ? -sortDirection : ["precision","recall","f1","tp","mae_difference","relative_gain","seed_count","aggregate"].includes(key) ? -1 : 1;
+  sortDirection = key === sortKey ? -sortDirection : ["precision","recall","f1","relative_gain","seed_count","aggregate"].includes(key) ? -1 : 1;
   sortKey = key; page = 0; orderRows(); render();
 });
 elements.pageSize.addEventListener("change",() => {
@@ -1010,6 +976,6 @@ elements.closeDialog.addEventListener("click",() => elements.runDialog.close());
 setupReproductionActions();
 setupSourceActions();
 setupFavourites();
-elements.download.addEventListener("click",exportCsv);</script>
+</script>
 </body>
 </html>
