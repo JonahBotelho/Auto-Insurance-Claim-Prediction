@@ -15,11 +15,17 @@ function setupSourceActions() {
     downloadPayload('historical_scores.gz',bytes,'application/gzip');
   });
   for (const source of unified.sources) {
-    const option=document.createElement('option');option.value=source.id;option.textContent=source.name;elements.source.append(option);
+    if (!source.archived) {
+      const option=document.createElement('option');option.value=source.id;option.textContent=source.name;elements.source.append(option);
+    }
     button(source.name+' (JSON)',()=>downloadPayload(source.id+'-complete-source.json',source));
   }
   button('Archive checksums',()=>downloadPayload('dashboard-source-manifest.json',unified.archive_manifest));
   const requested=new URLSearchParams(location.search).get('source');
-  if ([...elements.source.options].some(option=>option.value===requested)) elements.source.value=requested;
-  elements.source.addEventListener('change',query);
+  elements.source.value=[...elements.source.options].some(option=>option.value===requested) ? requested : defaultSource;
+  if (elements.source.value===f1Study) setSort('f1');
+  elements.source.addEventListener('change',()=>{
+    if (elements.source.value===f1Study) setSort('f1');
+    query();
+  });
 }

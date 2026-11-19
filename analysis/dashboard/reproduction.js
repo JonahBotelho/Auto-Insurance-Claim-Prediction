@@ -28,7 +28,8 @@ function trainingPromptValues(row) {
     ["Amount cap before multiplier",config.amount_cap ?? "None"],["CV folds",config.n_splits]];
   const labels = {family:"Classifier family",iterations:"Boosting iterations",rate:"Learning rate",leaves:"Maximum leaf nodes",
     leaf:"Minimum samples per leaf",depth:"Depth",l2:"L2 regularization",oversampling:"Oversampling target (%)",
-    smoothing:"Profile-history smoothing",early_stopping:"Early stopping",amount_history:"Past-amount history"};
+    smoothing:"Profile-history smoothing",early_stopping:"Early stopping",amount_history:"Past-amount history",
+    extended_amount_history:"Past log-amount variance and whole-cent share"};
   for (const [key,value] of Object.entries(settings)) {
     if (key !== "name") values.push([labels[key] || key,String(value)]);
   }
@@ -40,6 +41,12 @@ function trainingConfigInputs(row) {
 }
 
 function reproductionPlan(row) {
+  if (row.submission) {
+    return {mode:"analysis",badge:"Checkpoint 2",prompts:[],
+      command:"python -m src.generate_checkpoint2_candidates --submission "+row.submission+" --seed "+row.training_seed,
+      note:"Generate this submission using its frozen configuration and the full training dataset.",
+      footnote:"The command writes the submission CSV to data/checkpoint2/ and the training metrics to data/checkpoint2 metrics/."};
+  }
   if (row.reproduction === "checkpoint") {
     const seed=row.reproduction_seed ?? row.seed ?? 42;
     return {mode:"analysis",badge:"Checkpoint 2",prompts:[],
@@ -66,9 +73,10 @@ function fillDefinitions(target, entries) {
 
 function renderResultSummary(row) {
   elements.dialogTitle.textContent = row.labels.join(", ");
-  elements.dialogSubtitle.textContent = row.settings.family==='checkpoint_blend' ? "Checkpoint 2 submission" : (row.name || row.settings.family);
+  elements.dialogSubtitle.textContent = row.submission || row.settings.family==='checkpoint_blend'
+    ? "Checkpoint 2 submission" : (row.name || row.settings.family);
   elements.dialogMetrics.replaceChildren();
-  for (const [label,key] of [["Mean MAE","mae"],["All-zero mean MAE","baseline_mae"],
+  for (const [label,key] of [["Mean MAE","mae"],["Lowest seed MAE","min_mae"],["All-zero mean MAE","baseline_mae"],
     ["MAE reduction","mae_difference"],["Improvement","relative_gain"],["Claim precision","precision"],["Claim recall","recall"],["Mean F1","f1"]]) {
     const card = document.createElement("div"), name = document.createElement("span"), value = document.createElement("strong");
     name.textContent = label;
@@ -130,7 +138,7 @@ function renderModelDetails(row) {
     ["Status",row.status || "Historical fit"],["Classifier",row.classifier || "Histogram Gradient Boosting"],
     ["Sources",row.source_ids.join(', ')],
     ["Evaluation rows by seed",row.per_seed.map(score=>score.seed+': '+numbers.format(score.rows)).join(', ')],
-    ["Aggregate",row.hasMetrics ? decimal(row.aggregate) : null],
+    ["MAE points",row.mae_points?.toFixed(2)],["F1 points",row.f1_points?.toFixed(2)],["Aggregate points",row.aggregate?.toFixed(2)],
     ["Boosting iterations",settings.iterations ?? row.max_iter],["Learning rate",settings.rate ?? row.learning_rate],
     ["Maximum leaf nodes",settings.leaves ?? row.max_leaf_nodes],["Depth",settings.depth],
     ["Minimum samples per leaf",settings.leaf ?? row.min_samples_leaf],
@@ -138,6 +146,7 @@ function renderModelDetails(row) {
     ["Early stopping",settings.early_stopping ?? (row.status ? "Disabled" : "auto")],
     ["Oversampling target",settings.oversampling!=null ? settings.oversampling + "%" : "See blend components"],["Oversampling sampling seed",42],
     ["Profile-history smoothing",settings.smoothing],["Past claim amount feature",settings.amount_history ? "Enabled" : "Disabled"],
+    ["Extended amount history",settings.extended_amount_history ? "Past log-amount variance and whole-cent share" : null],
     ["Severity rule",severityDescriptions[row.severity_method || "weighted_profile"]],
     ["Ridge alpha",row.hasMetrics ? row.alpha : null],["Amount cap before multiplier",row.amount_cap],
     ["Blend components",settings.family==='checkpoint_blend' ? JSON.stringify(settings) : null],
@@ -145,6 +154,7 @@ function renderModelDetails(row) {
 }
 
 function showRunDetails(row) {
+  elements.reproductionSeed.closest("label").hidden = Boolean(row.submission);
   elements.reproductionSeed.replaceChildren();
   for (const seed of row.seeds?.length ? row.seeds : [row.seed ?? 42]) {
     const option = document.createElement("option"); option.value = seed; option.textContent = seed;

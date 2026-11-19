@@ -9,13 +9,17 @@ function classifierSettings(run) {
   const settings=run.settings ? {...run.settings} : {family:'hist',iterations:run.max_iter,rate:run.learning_rate,
     leaves:run.max_leaf_nodes,leaf:run.min_samples_leaf,l2:run.l2_regularization,
     oversampling:run.oversampling_percent,smoothing:run.smoothing,early_stopping:'auto'};
-  delete settings.name;delete settings.amount_cap;settings.amount_history ??= false;return settings;
+  delete settings.name;delete settings.amount_cap;settings.amount_history ??= false;
+  if (!settings.extended_amount_history) delete settings.extended_amount_history;
+  return settings;
 }
 function initializeGroups(runs,records) {
   const indexed=new Map();metadata=new Map();groupByRun=new Map();
   function groupFor(run) {
     const settings=classifierSettings(run),key=stableKey({settings,evaluation:run.evaluation_percent,
-      severity:run.severity_method || 'weighted_profile',cap:run.amount_cap ?? null,folds:run.folds ?? 5});
+      severity:run.severity_method || 'weighted_profile',cap:run.amount_cap ?? null,folds:run.folds ?? 5,
+      // A submitted configuration keeps its documented holdouts even in All sources.
+      ...(run.submission ? {submission:run.submission} : {})});
     if (!indexed.has(key)) indexed.set(key,{id:indexed.size+1,key,runs:[],records:[],settings});
     return indexed.get(key);
   }
@@ -55,17 +59,18 @@ function aggregatePoint(group,references,point,filters) {
     mae_difference:score.baseline_mae-score.mae,relative_gain:1-score.mae/score.baseline_mae}));
   const mean=key=>perSeed.every(row=>row[key]!=null) ? perSeed.reduce((sum,row)=>sum+row[key],0)/perSeed.length : null;
   const first=group.runs[0] || group.records[0],precision=mean('precision'),recall=mean('recall'),gain=mean('relative_gain');
+  const mae=mean('mae'),f1=mean('f1');
   const sourceIds=[...new Set(observations.map(row=>row.source))];
   const labels=[...new Set(observations.map(row=>row.label))];
   return {...first,fit_id:group.id,settings:group.settings,hasMetrics:true,labels,source_ids:sourceIds,
     run_ids:[...new Set(observations.map(row=>row.run_id).filter(Boolean))],
     observations,conflicts,per_seed:perSeed,seeds:perSeed.map(row=>row.seed),seed_count:perSeed.length,
     favourite_key:favouriteKey(group,point,perSeed.map(row=>row.seed)),
-    seed:unique.has(42) ? 42 : perSeed[0].seed,mae:mean('mae'),mean_mae:mean('mae'),
+    seed:unique.has(42) ? 42 : perSeed[0].seed,mae,mean_mae:mae,
+    min_mae:Math.min(...observations.map(score=>score.mae)),
     baseline_mae:mean('baseline_mae'),all_zero_mean_mae:mean('baseline_mae'),mae_difference:mean('mae_difference'),
     // Average per-seed F1, since F1 computed from mean precision/recall differs.
-    relative_gain:gain,precision,recall,f1:mean('f1'),tp:mean('tp'),fp:mean('fp'),
-    aggregate:100*Math.cbrt(precision*recall*Math.max(0,gain)),
+    relative_gain:gain,precision,recall,f1,...checkpointPoints(mae,f1),tp:mean('tp'),fp:mean('fp'),
     flagged_percent:perSeed.every(row=>row.rows!=null) ? perSeed.reduce((sum,row)=>sum+100*(row.tp+row.fp)/row.rows,0)/perSeed.length : null,
     threshold:point[0],alpha:point[1],scale:point[2],reproduction:group.records.find(row=>row.reproduction)?.reproduction};
 }
@@ -76,14 +81,8 @@ function matches(row,filters) {
     || (filters.recallMin!==null && row.recall*100<filters.recallMin)
     || (filters.recallMax!==null && row.recall*100>filters.recallMax));
 }
-function better(row,best,priority) {
+function better(row,best) {
   if (!best) return true;
-  if (['aggregate','relative_gain','f1'].includes(priority)) return row[priority]>best[priority]
-    || (row[priority]===best[priority] && row.mae<best.mae);
-  if (priority==='precision') return row.precision>best.precision || (row.precision===best.precision
-    && (row.recall>best.recall || (row.recall===best.recall && row.mae<best.mae)));
-  if (priority==='recall') return row.recall>best.recall || (row.recall===best.recall
-    && (row.precision>best.precision || (row.precision===best.precision && row.mae<best.mae)));
   return row.mae<best.mae || (row.mae===best.mae && (row.precision>best.precision
     || (row.precision===best.precision && row.recall>best.recall)));
 }

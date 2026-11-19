@@ -7,7 +7,8 @@ from sklearn.base import BaseEstimator, RegressorMixin
 from src.dashboard_classifiers import build_dashboard_classifier, prepare_dashboard_features
 from src.feature_schema import (
     ALL_FEATURE_COLUMNS, DASHBOARD_CLASSIFIER_LABELS, DASHBOARD_SEVERITY_LABELS,
-    PROFILE_HISTORY_COLUMNS, PROFILE_LOG_AMOUNT_COLUMN, RANDOM_SEED,
+    PROFILE_HISTORY_COLUMNS, PROFILE_LOG_AMOUNT_COLUMN, PROFILE_LOG_AMOUNT_VARIANCE_COLUMN,
+    PROFILE_WHOLE_CENT_SHARE_COLUMN, RANDOM_SEED,
 )
 from src.oversampling import correct_claim_probabilities, oversample_claims
 from src.profile_history import ProfileHistory
@@ -16,6 +17,16 @@ from src.two_stage_model import build_claim_severity_pipeline
 
 def profile_keys(features):
     return pd.util.hash_pandas_object(features[ALL_FEATURE_COLUMNS], index=False).to_numpy()
+
+
+def _extended_amount_statistics(amounts):
+    # Some amounts are stored to more than two decimals. Use an absolute
+    # tolerance to recognize whole cents despite floating-point representation.
+    whole_cents = (amounts > 0) & (np.abs(amounts - np.round(amounts, 2)) < 1e-7)
+    return pd.DataFrame({
+        PROFILE_WHOLE_CENT_SHARE_COLUMN: whole_cents.astype(float),
+        PROFILE_LOG_AMOUNT_VARIANCE_COLUMN: np.log1p(amounts) ** 2,
+    })
 
 
 class DashboardClaimModel(RegressorMixin, BaseEstimator):
@@ -56,6 +67,8 @@ class DashboardClaimModel(RegressorMixin, BaseEstimator):
         log_amount = np.log1p(amounts)
         self.log_amount_sums_ = pd.Series(log_amount).groupby(keys).sum()
         self.log_amount_prior_ = log_amount[amounts > 0].mean()
+        if self.classifier_settings.get("extended_amount_history"):
+            self.extended_amount_sums_ = _extended_amount_statistics(amounts).groupby(keys).sum()
         positive = pd.DataFrame({"key": keys[amounts > 0], "log": np.log(amounts[amounts > 0])})
         grouped = positive.groupby("key")["log"]
         self.log_medians_ = grouped.agg(lambda values: np.median(values.to_numpy()))
@@ -70,14 +83,30 @@ class DashboardClaimModel(RegressorMixin, BaseEstimator):
 
     def _add_amount_history(self, features, classifier_features, own_amounts=None):
         result = classifier_features.copy()
-        total = self.log_amount_sums_.reindex(profile_keys(features)).fillna(0).to_numpy()
+        keys = profile_keys(features)
+        total = self.log_amount_sums_.reindex(keys).fillna(0).to_numpy()
         if own_amounts is not None:
             total = total - np.log1p(own_amounts)
         count = result[PROFILE_HISTORY_COLUMNS[1]].to_numpy()
         result[PROFILE_LOG_AMOUNT_COLUMN] = np.divide(
             total, count, out=np.full(len(features), self.log_amount_prior_), where=count > 0,
         )
+        if self.classifier_settings.get("extended_amount_history"):
+            self._add_extended_amount_history(result, keys, count, own_amounts)
         return result
+
+    def _add_extended_amount_history(self, result, keys, count, own_amounts):
+        totals = self.extended_amount_sums_.reindex(keys).fillna(0).to_numpy(copy=True)
+        if own_amounts is not None:
+            totals -= _extended_amount_statistics(own_amounts).to_numpy()
+        denominator = np.maximum(1, count)
+        result[PROFILE_WHOLE_CENT_SHARE_COLUMN] = totals[:, 0] / denominator
+        mean_log = result[PROFILE_LOG_AMOUNT_COLUMN].to_numpy()
+        variance = np.maximum(0, totals[:, 1] / denominator - mean_log ** 2)
+        # Cancellation after removing a row can leave tiny differences for
+        # identical histories. Round so trees cannot split on that noise.
+        result[PROFILE_LOG_AMOUNT_VARIANCE_COLUMN] = np.where(count >= 2, np.round(variance, 8), 0)
+        result[PROFILE_LOG_AMOUNT_COLUMN] = result[PROFILE_LOG_AMOUNT_COLUMN].round(9)
 
     def predict_claim_probability(self, features):
         settings = self.classifier_settings
@@ -106,10 +135,15 @@ class DashboardClaimModel(RegressorMixin, BaseEstimator):
         local = np.exp(log_median + np.quantile(self.residuals_, quantile))
         return np.where(np.isfinite(local), local, global_amount)
 
-    def predict(self, features):
+    def predict_components(self, features):
+        """Return claim probabilities and scaled amounts before the cutoff."""
         probability = self.predict_claim_probability(features)
         amount = self._predict_amount(features, probability)
         # Caps apply to the base amount before its multiplier, matching saved runs.
         if self.amount_cap is not None:
             amount = np.minimum(self.amount_cap, amount)
-        return np.where(probability >= self.claim_probability_threshold, amount * self.severity_scale, 0.)
+        return probability, amount * self.severity_scale
+
+    def predict(self, features):
+        probability, amount = self.predict_components(features)
+        return np.where(probability >= self.claim_probability_threshold, amount, 0.)
