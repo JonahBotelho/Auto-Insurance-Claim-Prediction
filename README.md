@@ -69,7 +69,7 @@ smoothing 0.25, profile-median severity, Ridge alpha 0.01 and multiplier 1.4.
 Keep seed **44** at the last prompt; the fixed threshold makes CV fold count
 irrelevant to its holdout score. Expected holdout: MAE 94.1284, precision 47.40%,
 recall 44.72%. Saving still refits on all rows, so those are evaluation scores.
-For any dashboard result, choose **View → Download configuration**, place
+For a single-model dashboard result, choose **View → Download configuration**, place
 `run-<id>.json` in the repository folder, then run:
 
 ```powershell
@@ -164,6 +164,59 @@ Install the analysis dependencies separately:
 ```powershell
 python -m pip install -r analysis/requirements.txt
 ```
+
+### Known-profile reranking archive
+
+Select **Known-profile reranking** in the dashboard to review the matched
+development scores for seeds 41–45. Neither challenger passed the development
+gate, so tune 264 was retained. The split manifest, paired scores and row-level
+predictions are archived in `analysis/output/known_profile_reranking_41_45/`.
+The experimental training and prediction code was removed.
+
+### Fixed-flag severity archive
+
+Select **Fixed-flag severity** in the dashboard for the matched baseline and
+best challenger on seeds 41–45. The study retained tune 264 after development.
+Paired scores, row-level predictions and the split manifest are archived in
+`analysis/output/fixed_flag_severity/`.
+
+### No positive claim history archive
+
+Select **No positive claim history** in the dashboard for tune 264 and the
+best flag policy on matched seeds 41–45. All six specialist policies fell
+short of the development gate. Results and the split manifest are archived
+in `analysis/output/no_positive_history/`.
+
+### Historical-size coverage comparison
+
+Run `python -m analysis.evaluate_known_profile_coverage --output-dir analysis/output/known_profile_coverage_rerun`
+to compare tune 264 with broader flagging rules on the historical holdouts.
+Use a fresh output directory. The study retained tune 264. The dashboard
+shows the five-seed comparison, and the saved reports include the
+42,000-row fitting check on the same holdouts.
+
+### Claim pruning archive
+
+Select **Claim pruning (seeds 41–45)** in the dashboard for tune 264 and the
+best development policy. All four policies lost mean F1, so the study retained
+tune 264. Per-split scores, split IDs and predictions are archived in
+`analysis/output/claim_pruning/`.
+
+### Batch claim detection archive
+
+Select **Batch claim detection (seeds 41–45)** in the dashboard for tune 264
+and the refit control. Both challengers fell short of the F1 gate. The split
+IDs, thresholds, predictions, and batch-size check are saved in
+`analysis/output/batch_claim_detection/`.
+
+### F1 detector comparison
+
+Run `python -m analysis.evaluate_claim_detectors --output-dir analysis/output/claim_detector_comparison_rerun`
+to compare disagreement resolution and an all-row LightGBM ranker on seeds
+41–45. Install dependencies with `python -m pip install -r src/optional_requirements.txt`. The dashboard
+reports the highest F1 and the highest F1 within 2% of tune 264's MAE.
+Scores, predictions, and verdicts are under
+`analysis/output/claim_detector_comparison/`.
 
 ### Model dashboard
 

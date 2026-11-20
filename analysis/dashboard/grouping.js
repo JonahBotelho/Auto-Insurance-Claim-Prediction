@@ -18,6 +18,8 @@ function initializeGroups(runs,records) {
   function groupFor(run) {
     const settings=classifierSettings(run),key=stableKey({settings,evaluation:run.evaluation_percent,
       severity:run.severity_method || 'weighted_profile',cap:run.amount_cap ?? null,folds:run.folds ?? 5,
+      // Matched reranking cohorts use their own fitted partitions and flag quotas.
+      ...(run.evaluation_cohort ? {cohort:run.evaluation_cohort} : {}),
       // A submitted configuration keeps its documented holdouts even in All sources.
       ...(run.submission ? {submission:run.submission} : {})});
     if (!indexed.has(key)) indexed.set(key,{id:indexed.size+1,key,runs:[],records:[],settings});

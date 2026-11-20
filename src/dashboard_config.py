@@ -4,7 +4,9 @@ import json
 import math
 from pathlib import Path
 
-from src.feature_schema import CONFIG_FILE_SCHEMA_VERSION, DASHBOARD_CLASSIFIER_LABELS, DASHBOARD_SEVERITY_LABELS
+from src.feature_schema import (
+    CONFIG_FILE_SCHEMA_VERSION, DASHBOARD_CLASSIFIER_LABELS, DASHBOARD_SEVERITY_LABELS,
+)
 from src.oversampling import validate_oversampling_percent
 
 

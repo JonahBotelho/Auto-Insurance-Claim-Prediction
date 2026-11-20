@@ -5,6 +5,7 @@ const severityDescriptions = {
   profile_median:"Unweighted profile median, with Ridge fallback",
   mixture_quantile:"Profile residual quantile, with minimum quantile 0.05",
   blended_weighted_profile:"Blended probability × primary model profile median",
+  median_payout:"Median payout with tune 264 pricing for profiles without positive history",
 };
 
 function trainingConfiguration(row) {
@@ -40,7 +41,44 @@ function trainingConfigInputs(row) {
   return JSON.stringify(trainingConfiguration(row),null,2) + "\n";
 }
 
+function usesMatchedHoldouts(row) {
+  return ["profile_reranking","fixed_flag_severity","no_positive_history","known_profile_coverage","claim_pruning",
+    "batch_claim_detection","claim_detector_comparison"].includes(row.reproduction);
+}
+
 function reproductionPlan(row) {
+  if (row.reproduction === "claim_detector_comparison") {
+    return {mode:"analysis",badge:"Experiment 7",prompts:[],
+      command:"python -m analysis.evaluate_claim_detectors --output-dir analysis/output/claim_detector_comparison_rerun",
+      note:"Replay the controls and evaluate both challengers on seeds 41–45.",
+      footnote:"The dashboard scores are historical. Confirmation status and learned cutoffs are saved with the study."};
+  }
+  if (row.reproduction === "batch_claim_detection") {
+    return {mode:"missing",badge:"Archived experiment",
+      note:"Tune 264 was retained after development. Scores and predictions are in analysis/output/batch_claim_detection/."};
+  }
+  if (row.reproduction === "claim_pruning") {
+    return {mode:"missing",badge:"Archived experiment",
+      note:"Tune 264 was retained after development. Scores and predictions are in analysis/output/claim_pruning/."};
+  }
+  if (row.reproduction === "known_profile_coverage") {
+    return {mode:"analysis",badge:"Historical-size comparison",prompts:[],
+      command:"python -m analysis.evaluate_known_profile_coverage --output-dir analysis/output/known_profile_coverage_rerun",
+      note:"Evaluate four coverage rules on tune 264's historical splits. The runner also compares 42,000 fitting rows on the same holdouts.",
+      footnote:"Choose a fresh output directory for each run."};
+  }
+  if (row.reproduction === "no_positive_history") {
+    return {mode:"missing",badge:"Archived experiment",
+      note:"Tune 264 was retained after development. Saved scores and predictions are in analysis/output/no_positive_history/."};
+  }
+  if (row.reproduction === "fixed_flag_severity") {
+    return {mode:"missing",badge:"Archived experiment",
+      note:"Tune 264 was retained after development. Saved scores and predictions are in analysis/output/fixed_flag_severity/."};
+  }
+  if (row.reproduction === "profile_reranking") {
+    return {mode:"missing",badge:"Archived experiment",
+      note:"The experiment stopped after development and its runner was removed. Saved predictions and split manifests are in analysis/output/known_profile_reranking_41_45/."};
+  }
   if (row.submission) {
     return {mode:"analysis",badge:"Checkpoint 2",prompts:[],
       command:"python -m src.generate_checkpoint2_candidates --submission "+row.submission+" --seed "+row.training_seed,
@@ -84,8 +122,16 @@ function renderResultSummary(row) {
     card.append(name,value); elements.dialogMetrics.append(card);
   }
   elements.dialogContext.replaceChildren();
-  for (const label of [row.evaluation_percent + "% holdout", "Seeds " + ((row.seeds || []).join(", ") || "unavailable"),
-    row.hasMetrics ? "Threshold " + decimal(row.threshold,3) : "No saved metrics",
+  const thresholdLabel = usesMatchedHoldouts(row) ? "Incumbent threshold " : "Threshold ";
+  const thresholdText = row.threshold_method === "experiment7_oof"
+    ? "Cutoffs fitted per seed"
+    : row.threshold_method === "experiment7_blend" ? "Average log-odds margin ≥ 0"
+    : row.reproduction === "claim_detector_comparison" ? "Threshold " + decimal(row.threshold,3)
+    : row.threshold_method === "nested_f1"
+    ? "Mean selected threshold " + decimal(row.per_seed.reduce((sum, seed) => sum + seed.threshold, 0) / row.per_seed.length, 3)
+    : thresholdLabel + decimal(row.threshold,3);
+  for (const label of [row.evaluation_label || row.evaluation_percent + "% holdout", "Seeds " + ((row.seeds || []).join(", ") || "unavailable"),
+    row.hasMetrics ? thresholdText : "No saved metrics",
     ...(row.hasMetrics ? ["Amount × " + row.scale] : [])]) {
     const chip = document.createElement("span"); chip.textContent = label; elements.dialogContext.append(chip);
   }
@@ -134,10 +180,15 @@ function renderReproduction(row) {
 
 function renderModelDetails(row) {
   const settings = row.settings || {};
+  const pairedDelta = key => usesMatchedHoldouts(row)
+    ? decimal(row.per_seed.reduce((total, score) => total + score[key], 0) / row.per_seed.length, 6)
+    : null;
   fillDefinitions(elements.settingsList, [
     ["Status",row.status || "Historical fit"],["Classifier",row.classifier || "Histogram Gradient Boosting"],
     ["Sources",row.source_ids.join(', ')],
     ["Evaluation rows by seed",row.per_seed.map(score=>score.seed+': '+numbers.format(score.rows)).join(', ')],
+    ["Model fitting seed",row.model_seed],["MAE change vs tune 264",pairedDelta("delta_mae")],
+    ["F1 change vs tune 264",pairedDelta("delta_f1")],
     ["MAE points",row.mae_points?.toFixed(2)],["F1 points",row.f1_points?.toFixed(2)],["Aggregate points",row.aggregate?.toFixed(2)],
     ["Boosting iterations",settings.iterations ?? row.max_iter],["Learning rate",settings.rate ?? row.learning_rate],
     ["Maximum leaf nodes",settings.leaves ?? row.max_leaf_nodes],["Depth",settings.depth],
@@ -147,6 +198,9 @@ function renderModelDetails(row) {
     ["Oversampling target",settings.oversampling!=null ? settings.oversampling + "%" : "See blend components"],["Oversampling sampling seed",42],
     ["Profile-history smoothing",settings.smoothing],["Past claim amount feature",settings.amount_history ? "Enabled" : "Disabled"],
     ["Extended amount history",settings.extended_amount_history ? "Past log-amount variance and whole-cent share" : null],
+    ["Profile amount relationships",settings.profile_amount_relationships],
+    ["Experiment amount rule",row.severity_experiment_rule],
+    ["Experiment cap on adjusted amounts",row.severity_experiment_cap],
     ["Severity rule",severityDescriptions[row.severity_method || "weighted_profile"]],
     ["Ridge alpha",row.hasMetrics ? row.alpha : null],["Amount cap before multiplier",row.amount_cap],
     ["Blend components",settings.family==='checkpoint_blend' ? JSON.stringify(settings) : null],
@@ -154,7 +208,7 @@ function renderModelDetails(row) {
 }
 
 function showRunDetails(row) {
-  elements.reproductionSeed.closest("label").hidden = Boolean(row.submission);
+  elements.reproductionSeed.closest("label").hidden = Boolean(row.submission) || usesMatchedHoldouts(row);
   elements.reproductionSeed.replaceChildren();
   for (const seed of row.seeds?.length ? row.seeds : [row.seed ?? 42]) {
     const option = document.createElement("option"); option.value = seed; option.textContent = seed;
