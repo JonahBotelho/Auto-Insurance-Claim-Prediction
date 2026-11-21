@@ -53,7 +53,13 @@ def cross_validate_thresholds(
         actual = y.iloc[validation].to_numpy()
         # The cutoff affects only the final gate. All candidates share one
         # fit and one set of out-of-fold predictions per fold.
-        predicted = np.where(probability[:, None] >= thresholds, amount[:, None], 0)
+        cutoff = thresholds
+        adaptive = getattr(fitted, "adaptive_claim_threshold", None)
+        if adaptive is not None:
+            if len(thresholds) != 1:
+                raise ValueError("Adaptive claim thresholds require a single operating policy.")
+            cutoff = adaptive(probability)
+        predicted = np.where(probability[:, None] >= cutoff, amount[:, None], 0)
         mae_scores[fold] = np.abs(actual[:, None] - predicted).mean(axis=0)
         f1_scores[fold] = [
             f1_score(actual > 0, candidate > 0, zero_division=0) for candidate in predicted.T

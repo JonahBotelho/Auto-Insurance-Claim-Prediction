@@ -1,39 +1,48 @@
 "use strict";
 const dataset = JSON.parse(document.getElementById("run-data").textContent);
-const unified = JSON.parse(document.getElementById("unified-data").textContent);
 const elements = Object.fromEntries(Array.from(document.querySelectorAll("[id]")).map(element => [element.id, element]));
 const metricInputs = ["maeMin","maeMax","precisionMin","precisionMax","recallMin","recallMax"];
 const f1Study = "claim-f1-tuning";
 const defaultSource = "";
 let rows = [], page = 0, pageSize = 50, sortKey = "mae", sortDirection = 1;
 let ready = false, historicalRequested = false, requestId = 0, debounce;
+let unified;
 const numbers = new Intl.NumberFormat("en-US");
 const percent = value => (value * 100).toFixed(2) + "%";
 const decimal = (value, digits = 4) => Number(value).toFixed(digits);
 const missing = value => value === undefined || value === null;
-for (const [value, label] of [
-  [dataset.runs.length,"historical runs"],
-  [dataset.runs.filter(run => run.qualifying > 0).length,"with original scores"],
-  [dataset.runs.filter(run => run.qualifying === 0).length,"with discarded original scores"],
-  [dataset.scoreCount,"saved configurations"],
-  [unified.records.length,"retained study points"],
-]) {
-  const span = document.createElement("span"), strong = document.createElement("strong");
-  strong.textContent = numbers.format(value);
-  span.append(strong, " " + label); elements.datasetSummary.append(span);
+async function loadStudyData() {
+  const payload = JSON.parse(elements["unified-data"].textContent);
+  if (typeof payload !== "string") return payload;
+  const bytes = Uint8Array.from(atob(payload), character => character.charCodeAt(0));
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+  return new Response(stream).json();
 }
-for (const value of [...new Set([...dataset.runs,...unified.records].map(run => run.evaluation_percent))].sort((a,b) => a-b)) {
-  const option = document.createElement("option");
-  option.value = value; option.textContent = value + "% evaluation / " + (100-value) + "% training";
-  elements.evaluation.append(option);
-}
-for (const value of [...new Set([...dataset.runs.map(run => run.seed ?? 42),...unified.records.flatMap(row=>row.per_seed.map(score=>score.seed))])].sort((a,b) => a-b)) {
-  const option = document.createElement("option"); option.value = value; option.textContent = value;
-  elements.seed.append(option);
+
+function setupDatasetSummary() {
+  for (const [value, label] of [
+    [dataset.runs.length,"historical runs"],
+    [dataset.runs.filter(run => run.qualifying > 0).length,"with original scores"],
+    [dataset.runs.filter(run => run.qualifying === 0).length,"with discarded original scores"],
+    [dataset.scoreCount,"saved configurations"],
+    [unified.records.length,"retained study points"],
+  ]) {
+    const span = document.createElement("span"), strong = document.createElement("strong");
+    strong.textContent = numbers.format(value);
+    span.append(strong, " " + label); elements.datasetSummary.append(span);
+  }
+  for (const value of [...new Set([...dataset.runs,...unified.records].map(run => run.evaluation_percent))].sort((a,b) => a-b)) {
+    const option = document.createElement("option");
+    option.value = value; option.textContent = value + "% evaluation / " + (100-value) + "% training";
+    elements.evaluation.append(option);
+  }
+  for (const value of [...new Set([...dataset.runs.map(run => run.seed ?? 42),...unified.records.flatMap(row=>row.per_seed.map(score=>score.seed))])].sort((a,b) => a-b)) {
+    const option = document.createElement("option"); option.value = value; option.textContent = value;
+    elements.seed.append(option);
+  }
 }
 const workerUrl = URL.createObjectURL(new Blob([elements["worker-source"].textContent], {type:"text/javascript"}));
 const worker = new Worker(workerUrl);
-worker.postMessage({type:"init", runs:dataset.runs, records:unified.records, alphas:dataset.alphas, scales:dataset.scales, count:dataset.scoreCount});
 
 function showError(message) {
   elements.filterError.textContent = message; elements.filterError.hidden = false;
@@ -220,6 +229,14 @@ elements.tableBody.addEventListener("click",event => {
   const button = event.target.closest("[data-open-run]"); if (button) openRun(Number(button.dataset.openRun));
 });
 elements.closeDialog.addEventListener("click",() => elements.runDialog.close());
-setupReproductionActions();
-setupSourceActions();
-setupFavourites();
+
+async function initializeDashboard() {
+  unified = await loadStudyData();
+  setupDatasetSummary();
+  setupReproductionActions();
+  setupSourceActions();
+  setupFavourites();
+  worker.postMessage({type:"init", runs:dataset.runs, records:unified.records, alphas:dataset.alphas, scales:dataset.scales, count:dataset.scoreCount});
+}
+
+initializeDashboard().catch(error => showError("Unable to load the saved study data. " + error.message));

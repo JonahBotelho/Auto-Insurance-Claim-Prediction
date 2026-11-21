@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "threshold": 0.275,
+  "evaluation_percent": 25,
+  "random_seed": 42,
+  "severity_method": "mixture_quantile",
+  "aggregate_payout_pricing": true,
+  "ridge_alpha": 0.01,
+  "severity_scale": 0.75,
+  "amount_cap": 3000,
+  "n_splits": 5,
+  "classifier": {
+    "amount_history": true,
+    "extended_amount_history": true,
+    "family": "hist",
+    "iterations": 125,
+    "rate": 0.06,
+    "leaves": 11,
+    "leaf": 100,
+    "l2": 50,
+    "oversampling": 0,
+    "smoothing": 0.25,
+    "early_stopping": false
+  }
+}

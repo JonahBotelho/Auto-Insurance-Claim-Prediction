@@ -62,6 +62,9 @@ def _select_best_threshold(X_train, y_train, settings):
         )
     except Exception as error:
         raise ValueError(f"Threshold cross-validation failed: {error}") from error
+    if settings.reproduction and settings.reproduction.get("template_claim_ensemble"):
+        print(f"Expected-F1 decision rule: mean CV MAE {mae[0]:.2f}, claim F1 {f1[0]:.4f}")
+        return candidates[0]
     for threshold, mean_mae, mean_f1 in zip(probabilities, mae, f1):
         print(f"Threshold {threshold:.3f}: mean CV MAE {mean_mae:.2f}, claim F1 {mean_f1:.4f}")
 
