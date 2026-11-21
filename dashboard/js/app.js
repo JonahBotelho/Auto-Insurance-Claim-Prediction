@@ -1,21 +1,31 @@
 "use strict";
-const dataset = JSON.parse(document.getElementById("run-data").textContent);
 const elements = Object.fromEntries(Array.from(document.querySelectorAll("[id]")).map(element => [element.id, element]));
-const metricInputs = ["maeMin","maeMax","precisionMin","precisionMax","recallMin","recallMax"];
+const dataDirectory = new URL("data/", document.baseURI);
+// Load the query worker and its grouping logic from the same release as the page script.
+const workerUrl = new URL("worker.js", document.currentScript.src);
+workerUrl.search = new URL(document.currentScript.src).search;
+const metricErrors = {
+  maeMax: "Enter a maximum mean MAE of 0 or greater.",
+  precisionMin: "Enter minimum precision between 0 and 100.",
+  recallMin: "Enter minimum recall between 0 and 100.",
+  f1Min: "Enter a minimum F1 between 0 and 1.",
+};
+const metricInputs = Object.keys(metricErrors);
 const f1Study = "claim-f1-tuning";
 const defaultSource = "";
+const applyingFilters = "Applying filters…";
 let rows = [], page = 0, pageSize = 50, sortKey = "mae", sortDirection = 1;
-let ready = false, historicalRequested = false, requestId = 0, debounce;
-let unified;
+let resultsMessage = "";
+let ready = false, requestId = 0, debounce;
+let requestedMinimumF1 = null;
+let dataset, unified, worker;
 const numbers = new Intl.NumberFormat("en-US");
 const percent = value => (value * 100).toFixed(2) + "%";
 const decimal = (value, digits = 4) => Number(value).toFixed(digits);
 const missing = value => value === undefined || value === null;
 async function loadStudyData() {
-  const payload = JSON.parse(elements["unified-data"].textContent);
-  if (typeof payload !== "string") return payload;
-  const bytes = Uint8Array.from(atob(payload), character => character.charCodeAt(0));
-  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+  const response = await fetchDashboardData(dataDirectory, "studies.json.gz");
+  const stream = response.body.pipeThrough(new DecompressionStream("gzip"));
   return new Response(stream).json();
 }
 
@@ -41,29 +51,25 @@ function setupDatasetSummary() {
     elements.seed.append(option);
   }
 }
-const workerUrl = URL.createObjectURL(new Blob([elements["worker-source"].textContent], {type:"text/javascript"}));
-const worker = new Worker(workerUrl);
-
 function showError(message) {
   elements.filterError.textContent = message; elements.filterError.hidden = false;
 }
-function readFilters() {
-  const filters = {};
+function readMetricBounds() {
+  const bounds = {};
   for (const name of metricInputs) {
-    const input = elements[name], value = input.value === "" ? null : input.valueAsNumber;
+    const input = elements[name];
     input.removeAttribute("aria-invalid");
-    if (input.validity.badInput || (value !== null && (!Number.isFinite(value) || value < 0
-        || (name !== "maeMin" && name !== "maeMax" && value > 100)))) {
+    if (!input.validity.valid) {
       input.setAttribute("aria-invalid","true");
-      throw new Error("Enter valid nonnegative values. Precision and recall must be between 0 and 100.");
+      throw new Error(metricErrors[name]);
     }
-    filters[name] = value;
+    bounds[name] = input.value === "" ? null : input.valueAsNumber;
   }
-  for (const prefix of ["mae","precision","recall"]) {
-    if (filters[prefix+"Min"] !== null && filters[prefix+"Max"] !== null
-        && filters[prefix+"Min"] > filters[prefix+"Max"])
-      throw new Error("Each minimum must be less than or equal to its maximum.");
-  }
+  return bounds;
+}
+
+function readFilters() {
+  const filters = readMetricBounds();
   const id = elements.runId.value === "" ? null : elements.runId.valueAsNumber;
   if (elements.runId.validity.badInput || (id !== null && (!Number.isInteger(id) || id < 1)))
     throw new Error("Run ID must be a positive whole number.");
@@ -73,44 +79,68 @@ function readFilters() {
   filters.minimumSeeds = Number(elements.minimumSeeds.value);
   filters.source = elements.source.value;
   filters.coverage = elements.coverage.value;
-  filters.includeMissing = elements.includeMissing.checked;
   filters.favouritesOnly = elements.favouritesOnly.checked;
   filters.favouriteKeys = filters.favouritesOnly ? [...favouriteKeys] : [];
-  const bounds = metricInputs.some(key => filters[key] !== null);
-  elements.includeMissing.disabled = bounds;
-  elements.includeMissing.parentElement.classList.toggle("disabled", bounds);
-  elements.includeMissing.title = bounds ? "Metric filters exclude unavailable values. Clear metric filters to include these runs." : "";
+  const bounded = metricInputs.some(key => filters[key] !== null);
+  const includeMissing = elements.includeMissing;
+  includeMissing.disabled = bounded || filters.minimumSeeds > 1;
+  includeMissing.parentElement.classList.toggle("disabled", includeMissing.disabled);
+  includeMissing.parentElement.title = includeMissing.disabled
+    ? "Set Minimum seeds to 1 or more and clear metric filters to include these runs." : "";
+  filters.includeMissing = includeMissing.checked && !includeMissing.disabled;
   return filters;
 }
 function query() {
   if (!ready) return;
   clearTimeout(debounce);
+  const currentRequest = ++requestId;
   try {
     const filters = readFilters();
+    requestedMinimumF1 = filters.f1Min;
     elements.filterError.hidden = true;
-    const request = {type:"query",filters,requestId:++requestId};
-    if (!historicalRequested && (!filters.source || filters.source === "historical")) {
-      request.payload = elements["score-data"].textContent.trim();
-      historicalRequested = true;
-    }
-    worker.postMessage(request);
+    showResultsMessage(applyingFilters);
+    worker.postMessage({type:"query",filters,requestId:currentRequest});
   } catch (error) {
-    requestId++; showError(error.message);
+    showError(error.message);
+    showResultsMessage("Correct the filters to see results.");
   }
 }
-function queueQuery() { clearTimeout(debounce); debounce = setTimeout(query,150); }
-worker.onmessage = ({data: message}) => {
+function queueQuery() {
+  if (!ready) return;
+  clearTimeout(debounce);
+  // Ignore results for the previous input even before the debounced query is sent.
+  requestId++;
+  showResultsMessage(applyingFilters);
+  debounce = setTimeout(query,150);
+}
+function handleWorkerMessage({data: message}) {
   if (message.type === "ready") {
     ready = true;
-    URL.revokeObjectURL(workerUrl); query();
+    query();
   } else if (message.type === "results" && message.requestId === requestId) {
-    rows = message.rows;
+    rows = requestedMinimumF1 === null ? message.rows : message.rows.filter(
+      row => Number.isFinite(row.f1) && row.f1 >= requestedMinimumF1
+    );
+    resultsMessage = "";
+    updateF1FilterStatus(requestedMinimumF1);
     page = 0; orderRows(); render();
   } else if (message.type === "error" && (message.requestId === undefined || message.requestId === requestId)) {
     showError(message.message);
+    showResultsMessage("Unable to refresh results.");
   }
-};
-worker.onerror = event => showError("Unable to load the local score data. Use a current Chrome or Edge browser. " + event.message);
+}
+
+function updateF1FilterStatus(minimumF1) {
+  const status = elements.f1FilterStatus;
+  if (minimumF1 == null) {
+    status.hidden = true;
+    return;
+  }
+  const count = numbers.format(rows.length);
+  const resultLabel = rows.length === 1 ? "result" : "results";
+  status.textContent = `${count} ${resultLabel} with mean F1 ≥ ${minimumF1}`;
+  status.hidden = false;
+}
 
 function orderRows() {
   rows.sort((left,right) => {
@@ -136,7 +166,15 @@ function shortRunLabel(label) {
     .replace(/^Claim history tune /, "History tune ")
     .replace(/^(Five-seed R\d+) \u00b7 .+$/, "$1");
 }
+function showResultsMessage(message) {
+  if (resultsMessage === message) return;
+  updateF1FilterStatus(null);
+  resultsMessage = message;
+  rows = [];
+  render();
+}
 function render() {
+  elements.runTable.setAttribute("aria-busy", String(resultsMessage === applyingFilters));
   if (elements.pageSize.value === "all") pageSize = Math.max(1, rows.length);
   elements.tableBody.replaceChildren();
   const maximumPage = Math.max(0,Math.ceil(rows.length/pageSize)-1);
@@ -182,13 +220,14 @@ function render() {
     action.append(button); tr.append(action); fragment.append(tr);
   }
   if (!rows.length) {
-    const message = elements.favouritesOnly.checked ? "No favourites match these filters. Star a row or widen the filters."
-      : "No saved configurations match these filters. Clear or widen the filters.";
+    const message = resultsMessage || (elements.favouritesOnly.checked
+      ? "No favourites match these filters. Star a row or widen the filters."
+      : "No saved configurations match these filters. Clear or widen the filters.");
     const tr = document.createElement("tr"), td = cell(message,"empty");
     td.colSpan = 13; tr.append(td); fragment.append(tr);
   }
   elements.tableBody.append(fragment);
-  elements.pageInfo.textContent = rows.length ? numbers.format(start+1) + "-" + numbers.format(Math.min(start+pageSize,rows.length)) + " of " + numbers.format(rows.length) : "0 results";
+  elements.pageInfo.textContent = rows.length ? numbers.format(start+1) + "-" + numbers.format(Math.min(start+pageSize,rows.length)) + " of " + numbers.format(rows.length) : resultsMessage || "0 results";
   elements.previous.disabled = page === 0; elements.next.disabled = page >= maximumPage;
 }
 function openRun(id) {
@@ -196,7 +235,11 @@ function openRun(id) {
   if (row) showRunDetails(row);
 }
 for (const key of [...metricInputs,"runId"]) elements[key].addEventListener("input",queueQuery);
-elements.evaluation.addEventListener("change",query); elements.seed.addEventListener("change",query);
+elements.evaluation.addEventListener("change",query);
+elements.seed.addEventListener("change",() => {
+  if (elements.seed.value) elements.minimumSeeds.value = "1";
+  query();
+});
 elements.minimumSeeds.addEventListener("change",query);
 elements.coverage.addEventListener("change",query);
 elements.includeMissing.addEventListener("change",query);
@@ -206,13 +249,12 @@ function setSort(key) {
 }
 elements.reset.addEventListener("click",() => {
   for (const key of [...metricInputs,"runId"]) elements[key].value = "";
-  elements.evaluation.value = ""; elements.seed.value = ""; elements.minimumSeeds.value = "1"; elements.source.value=defaultSource; elements.coverage.value="available"; elements.includeMissing.checked = true; elements.favouritesOnly.checked = false;
+  elements.evaluation.value = ""; elements.seed.value = "";
+  elements.minimumSeeds.value = elements.minimumSeeds.querySelector("option[selected]").value;
+  elements.source.value=defaultSource; elements.coverage.value="available"; elements.includeMissing.checked = true; elements.favouritesOnly.checked = false;
   setSort("mae"); query();
 });
-elements.previousLimits.addEventListener("click",() => {
-  for (const key of metricInputs) elements[key].value = "";
-  elements.precisionMin.value = 45; elements.recallMin.value = 30; query();
-});
+elements.applyFilters.addEventListener("click",query);
 for (const button of document.querySelectorAll("[data-sort]")) button.addEventListener("click",() => {
   const key = button.dataset.sort;
   sortDirection = key === sortKey ? -sortDirection : ["precision","recall","f1","relative_gain","seed_count","aggregate"].includes(key) ? -1 : 1;
@@ -231,12 +273,25 @@ elements.tableBody.addEventListener("click",event => {
 elements.closeDialog.addEventListener("click",() => elements.runDialog.close());
 
 async function initializeDashboard() {
-  unified = await loadStudyData();
+  if (location.protocol === "file:") {
+    showError("Start the local dashboard server using the command in README.md, then open http://127.0.0.1:8000/.");
+    return;
+  }
+  [dataset, unified] = await Promise.all([
+    fetchDashboardData(dataDirectory, "historical-runs.json").then(response => response.json()),
+    loadStudyData(),
+  ]);
   setupDatasetSummary();
   setupReproductionActions();
   setupSourceActions();
   setupFavourites();
+  worker = new Worker(workerUrl);
+  worker.onmessage = handleWorkerMessage;
+  worker.onerror = event => {
+    showError("Unable to run the dashboard worker. " + event.message);
+    showResultsMessage("Unable to refresh results.");
+  };
   worker.postMessage({type:"init", runs:dataset.runs, records:unified.records, alphas:dataset.alphas, scales:dataset.scales, count:dataset.scoreCount});
 }
 
-initializeDashboard().catch(error => showError("Unable to load the saved study data. " + error.message));
+initializeDashboard().catch(error => showError("Unable to load the dashboard data. " + error.message));

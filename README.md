@@ -328,9 +328,16 @@ Scores, predictions, and verdicts are under
 
 ### Model dashboard
 
-Open `dashboard/index.html` for historical runs, both seed searches, fresh
-historical evaluations, and checkpoint results. Select **Checkpoint 2** for
-the ten final submissions from `submission.md` and their recorded holdouts,
+Start the local dashboard server from the repository root.
+
+```powershell
+python -m http.server 8000 --bind 127.0.0.1 --directory dashboard
+```
+
+Open `http://127.0.0.1:8000/` for historical runs, both seed searches, fresh
+historical evaluations, and checkpoint results. The server works offline.
+Select **Checkpoint 2** for the ten final submissions from `submission.md` and
+their recorded holdouts,
 including the 95/5 run as `2_2_1`.
 Their aggregate points use the dashboard formula below. **Historical checkpoint
 blends** contains the earlier five-seed blend evaluations.
@@ -580,12 +587,13 @@ Mean F1 averages each seed's claim-detection F1 (0–1; higher is better),
 with zero when precision and recall are both zero. It is sortable and included in the run's observations download.
 Star rows to favourite their exact configuration and seed cohort; **Favourites only**
 shows saved rows alongside the other filters. Bookmarks persist in browser local
-storage for the same page/browser; if storage is blocked, they last for the session.
+storage for the same address and browser. Bookmarks from the old local file stay
+with that file's address. If storage is blocked, bookmarks last for the session.
 Clearing filters keeps bookmarks. Multiple operating points can be bookmarked per model.
 
-The dashboard is a saved standalone page with compressed study data. Its historical
-results and optional analysis caches are separate from the checkpoint 2 generator. Regenerate the
-extended-history tuning scores with `python -m analysis.tune_claim_history --output analysis/output/claim_history_tuning.json --dashboard dashboard/index.html`
+The dashboard data and optional analysis caches are separate from the checkpoint 2 generator.
+Regenerate the extended-history tuning scores with
+`python -m analysis.tune_claim_history --output analysis/output/claim_history_tuning.json --dashboard dashboard/index.html`
 after installing `src/requirements.txt` and `src/optional_requirements.txt`.
 
 ### Basic linear regression
