@@ -568,7 +568,13 @@ their per-seed metrics, and downloadable training configurations.
 Select **Extended claim history tuning (500 runs)** for 500 operating points
 scored on the same 25% holdouts with seeds 41–45. The source JSON includes a
 comparison of the selected leaders and earlier baselines on seeds 301–305.
-The dashboard opens on **All sources**, sorted by mean MAE. Select **Claim F1
+The dashboard opens on **All sources**, sorted by mean MAE, with **5 or more** seeds.
+Selecting an individual split seed sets the minimum to one. Use **Minimum F1**
+to filter mean claim F1 on a 0–1 scale. The other metric filters set a maximum
+mean MAE and minimum precision and recall. Filters update automatically, and
+**Apply filters** refreshes the results using the current values. The table shows
+**Applying filters…** until the updated results are ready. When Minimum F1 is set,
+the filter panel shows the applied cutoff and match count. Select **Claim F1
 tuning (500 runs)** to see results from seeds 41–45 sorted by mean claim F1.
 Rebuild the F1 study with `python -m analysis.tune_claim_f1`.
 Matching operating points average unique seeds. Grouped results select the
