@@ -47,18 +47,23 @@ def cross_validate_thresholds(
     f1_scores = np.empty_like(mae_scores)
     for fold, (train, validation) in enumerate(folds.split(X, y > 0)):
         fitted = clone(model).fit(X.iloc[train], y.iloc[train])
-        probability, amount = fitted.predict_components(X.iloc[validation])
+        held = X.iloc[validation]
+        cutoff = thresholds
+        # Batch rerankers may preserve the flag count of a different risk
+        # surface. Validate the cutoff they actually use for prediction.
+        batch_decision = getattr(fitted, "decision_components", None)
+        adaptive = getattr(fitted, "adaptive_claim_threshold", None)
+        if (batch_decision is not None or adaptive is not None) and len(thresholds) != 1:
+            raise ValueError("Adaptive claim thresholds require a single operating policy.")
+        if batch_decision is not None:
+            probability, amount, cutoff = batch_decision(held)
+        else:
+            probability, amount = fitted.predict_components(held)
+            if adaptive is not None:
+                cutoff = adaptive(probability)
         if not np.isfinite(probability).all() or not np.isfinite(amount).all():
             raise ValueError("Cross-validation returned nonfinite predictions.")
         actual = y.iloc[validation].to_numpy()
-        # The cutoff affects only the final gate. All candidates share one
-        # fit and one set of out-of-fold predictions per fold.
-        cutoff = thresholds
-        adaptive = getattr(fitted, "adaptive_claim_threshold", None)
-        if adaptive is not None:
-            if len(thresholds) != 1:
-                raise ValueError("Adaptive claim thresholds require a single operating policy.")
-            cutoff = adaptive(probability)
         predicted = np.where(probability[:, None] >= cutoff, amount[:, None], 0)
         mae_scores[fold] = np.abs(actual[:, None] - predicted).mean(axis=0)
         f1_scores[fold] = [

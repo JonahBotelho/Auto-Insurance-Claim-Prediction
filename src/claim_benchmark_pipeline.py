@@ -3,6 +3,7 @@
 import numpy as np
 from scipy.special import expit
 
+from src.bonus_malus_timeline import BonusMalusTimelineDetector
 from src.claim_count_mixture import MAX_ROWS
 from src.claim_history_leaf_retrieval import ClaimHistoryLeafRetrieval
 from src.claim_probability import log_odds
@@ -69,4 +70,11 @@ def benchmark_predictions(settings, features, target, query, reference):
     eligible &= (amounts == 0.) & ~surrogate & (np.abs(anchor - boundary) <= REVIEW_BAND)
     high = TARGET_RISK + REVIEW_MARGIN
     added = eligible & (pooled.predict_proba(design)[:, 1] >= high) & (missed.predict_proba(design)[:, 1] >= high)
-    return {"collision_price": amounts, "review_additions": np.where(added, tail.predict(query), amounts)}
+    review_amounts = np.where(added, tail.predict(query), amounts)
+    timeline = BonusMalusTimelineDetector(random_seed=42, alpha=0.80).fit(features, target)
+    _, bm_prices, bm_flags = timeline.augment_predictions(query, np.zeros(len(query)), review_amounts, review_amounts > 0., 0.258)
+    return {
+        "collision_price": amounts,
+        "review_additions": review_amounts,
+        "review_additions_bm_timeline": np.where(bm_flags, bm_prices, 0.),
+    }

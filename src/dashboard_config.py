@@ -25,7 +25,8 @@ def validate_dashboard_config(config):
                "severity_method", "ridge_alpha", "severity_scale", "amount_cap", "n_splits", "median_payout_pricing",
                "aggregate_payout_pricing", "profile_history_ensemble", "template_claim_ensemble",
                "payout_source_calibration", "source_tail_pricing", "cold_profile_fallback", "cold_payout_tail_pricing",
-               "cold_exposure_hazard", "local_tail_pricing"}
+               "cold_exposure_hazard", "local_tail_pricing", "pairwise_payout_ranking",
+               "bonus_malus_timeline", "count_retrieval_refinement"}
     if not isinstance(config, dict) or set(config) - allowed:
         raise ValueError("Unknown configuration fields or invalid JSON configuration object.")
     if type(config.get("schema_version")) is not int or config["schema_version"] != CONFIG_FILE_SCHEMA_VERSION:
@@ -79,6 +80,18 @@ def validate_dashboard_config(config):
         raise ValueError("Payout source calibration must be true or false.")
     if config.get("payout_source_calibration") and not config.get("template_claim_ensemble"):
         raise ValueError("Payout source calibration requires the template claim ensemble.")
+    if type(config.get("pairwise_payout_ranking", False)) is not bool:
+        raise ValueError("Pairwise payout ranking must be true or false.")
+    if config.get("pairwise_payout_ranking") and (not config.get("payout_source_calibration") or config.get("source_tail_pricing")):
+        raise ValueError("Pairwise payout ranking requires payout-source calibration and supplies its own tail pricing.")
+    if type(config.get("bonus_malus_timeline", False)) is not bool:
+        raise ValueError("Bonus-Malus timeline detection must be true or false.")
+    if config.get("bonus_malus_timeline") and not config.get("pairwise_payout_ranking"):
+        raise ValueError("Bonus-Malus timeline detection requires pairwise payout ranking.")
+    if type(config.get("count_retrieval_refinement", False)) is not bool:
+        raise ValueError("Count-retrieval refinement must be true or false.")
+    if config.get("count_retrieval_refinement") and not config.get("bonus_malus_timeline"):
+        raise ValueError("Count-retrieval refinement requires Bonus-Malus timeline detection.")
     if type(config.get("source_tail_pricing", False)) is not bool:
         raise ValueError("Source-tail pricing must be true or false.")
     if config.get("source_tail_pricing") and not config.get("payout_source_calibration"):
@@ -137,7 +150,19 @@ def build_dashboard_model(config, threshold):
                 ColdExposureHazardClaimEnsemble, ColdPayoutTailClaimEnsemble, ColdProfileClaimEnsemble,
                 LocalTailClaimEnsemble, PayoutSourceClaimEnsemble, SourceTailClaimEnsemble,
             )
-            if config.get("cold_exposure_hazard"):
+            if config.get("count_retrieval_refinement"):
+                from src.bonus_malus_claim_ensemble import CountRetrievalTimelineClaimEnsemble
+
+                ensemble = CountRetrievalTimelineClaimEnsemble
+            elif config.get("bonus_malus_timeline"):
+                from src.bonus_malus_claim_ensemble import PairwiseTimelineClaimEnsemble
+
+                ensemble = PairwiseTimelineClaimEnsemble
+            elif config.get("pairwise_payout_ranking"):
+                from src.pairwise_payout_ensemble import PairwisePayoutEnsemble
+
+                ensemble = PairwisePayoutEnsemble
+            elif config.get("cold_exposure_hazard"):
                 ensemble = ColdExposureHazardClaimEnsemble
             elif config.get("cold_payout_tail_pricing"):
                 ensemble = ColdPayoutTailClaimEnsemble
@@ -173,6 +198,12 @@ def print_dashboard_configuration(settings):
         print("Settlement pricing: profile-relative median with fitting-derived cap")
     if config.get("payout_source_calibration"):
         print("Payout source calibration: separate whole-cent and scaled probabilities")
+    if config.get("pairwise_payout_ranking"):
+        print("Pairwise payout ranking: rerank claim flags using fitting payout histories and quote support")
+    if config.get("count_retrieval_refinement"):
+        print("Warm refinement: count-hurdle agreement and dual leaf-retrieval admissions")
+    if config.get("bonus_malus_timeline"):
+        print("Cold detection: calibrated French Bonus-Malus reference-window timeline detector")
     if config.get("source_tail_pricing"):
         print("Payout floor: source-specific fitted lower tails")
     if config.get("local_tail_pricing"):

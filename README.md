@@ -43,12 +43,30 @@ it reduced mean MAE from 96.06478 to 95.33733 with mean F1 near 0.395 for both
 models. The saved model contains the fitted history and needs only the new CSV
 at prediction time.
 
+For the strongest deployable F1 (using only the 18 input features, with calibrated
+French Bonus-Malus reference-window cold detection), train with either:
+
+```powershell
+python -m src.train --config configs/claim_history/count_retrieval_bm_timeline_ensemble.json
+python -m src.train --config configs/claim_history/pairwise_bm_timeline_ensemble.json
+```
+
+Across seeds 41–45, `count_retrieval_bm_timeline_ensemble.json` reached **0.52064 F1 /
+93.03928 MAE** on 20% matched holdouts (+0.01046 F1 over `pairwise_payout_ensemble`),
+**0.51241 F1** at 25% matched, **0.41303 F1** on 25% mixed holdouts (+0.01803 F1),
+and **0.15702 F1** on 25% profile-disjoint holdouts (+0.00930 F1). `pairwise_bm_timeline_ensemble.json`
+is the lighter option (**0.51671 F1 / 93.03937 MAE** at 20%, **0.51049 F1 / 92.11566 MAE**
+at 25%, **0.41292 F1** on 25% mixed). Both are published under **Bonus-Malus reference-window
+timeline (seeds 41–45)** in the dashboard; reproduce natively from `src/` with
+`python -m src.reproduce_timeline_models --cohorts matched_20 matched_25 mixed_25 disjoint_25`
+(no `analysis/` files required).
+
 ## Reproduce the best F1 benchmark
 
 From the repository root, run `python -m pip install -r src/requirements.txt`
-and `python -m src.reproduce_claim_benchmark`. The five-seed mean for
-`review_additions` is **0.51468628 F1** and **93.02916839 MAE** on 20% holdouts.
-Add `--predictions claim_benchmark.csv.gz` to export the per-row predictions.
+and `python -m src.reproduce_claim_benchmark`. The five-seed mean on 20% holdouts is
+**0.520785 F1 / 93.02023 MAE** for `review_additions_bm_timeline` (and **0.51468628 F1 /
+93.02916839 MAE** for `review_additions`). Add `--predictions claim_benchmark.csv.gz` to export the per-row predictions.
 
 The benchmark uses the original `data/trainingset.csv` and the frozen upstream
 anchor scores and baseline quotes in `src/reference/`. It refits the downstream

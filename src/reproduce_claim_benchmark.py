@@ -67,7 +67,7 @@ def main():
         for seed in SEEDS:
             rows, result = run_seed(seed, data, reference, settings)
             for name, f1, mae in result:
-                print(f"{seed}  {name:<18} F1 {f1:.8f}  MAE {mae:.8f}", flush=True)
+                print(f"{seed}  {name:<28} F1 {f1:.8f}  MAE {mae:.8f}", flush=True)
                 metrics.append((name, f1, mae))
             if args.predictions:
                 predictions.append(rows)
