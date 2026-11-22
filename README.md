@@ -14,17 +14,18 @@ competition setup, and directions for future experiments.
 
 ## Final competition prediction
 
-From the repository root, install the dependencies and train one model:
+From the repository root, install the dependencies and train the selected final
+competition model (dashboard run **1180002**):
 
 ```powershell
-python -m pip install -r src/requirements.txt
-python -m src.train --config configs/claim_history/payout_source_local_tail_ensemble.json
+python -m pip install -r src/optional_requirements.txt
+python -m src.train --config configs/claim_history/em_reconciled_bm_v3_l1_ensemble.json
 ```
 
-Press Enter to confirm training. The config uses seed 42 and saves
-`models/two_stage_claim_model.joblib`. Seeds 41–45 are used for the benchmark
-below. If you already have the saved model, install the dependencies and skip
-training. Use `--model-path` to point to a model saved elsewhere.
+Press Enter to confirm training. The config uses seed 42, trains on all 70,000 rows
+of `data/trainingset.csv`, and saves `models/two_stage_claim_model.joblib`. If you
+already have the saved model, install the dependencies and skip training. Use
+`--model-path` to point to a model saved elsewhere.
 
 When the competition CSV arrives, replace the example paths and run:
 
@@ -32,40 +33,26 @@ When the competition CSV arrives, replace the example paths and run:
 python -m src.predict --input "C:\path\competition.csv" --output "C:\path\submission.csv"
 ```
 
-The input needs `rowIndex` and the same 18 feature columns as `data/testset.csv`.
-The submission contains `rowIndex` and `ClaimAmount` in the input row order.
+The input needs `rowIndex` and the same 18 feature columns as `data/testset.csv`;
+the saved model contains the fitted history and needs only the new CSV at
+prediction time. The submission contains `rowIndex` and `ClaimAmount` in the input
+row order.
 
-The pairwise payout model is another competition option. Install
-`src/optional_requirements.txt` and train with
-`python -m src.train --config configs/claim_history/pairwise_payout_ensemble.json`.
-It uses seed 42 and the same prediction command. On mixed-profile 25% holdouts,
-it reduced mean MAE from 96.06478 to 95.33733 with mean F1 near 0.395 for both
-models. The saved model contains the fitted history and needs only the new CSV
-at prediction time.
+Across seeds 41–45, `em_reconciled_bm_v3_l1_ensemble.json` adds exact EM reconciled
+veto, Bonus-Malus timeline v3 with joint expected-F1 cutoff, and calibrated \$1 < 48%
+L1 pricing, reaching **0.52301 F1 / 92.58461 MAE** on 20% matched holdouts (and
+**0.51424 F1 / 91.64024 MAE** on 25% matched holdouts in dashboard run **1180004**).
 
-For the strongest deployable F1 (using only the 18 input features, with calibrated
-French Bonus-Malus reference-window cold detection), train with either:
+Earlier deployable alternatives (same `src.train --config` and `src.predict` workflow):
 
-```powershell
-python -m src.train --config configs/claim_history/em_reconciled_bm_v3_l1_ensemble.json
-python -m src.train --config configs/claim_history/count_retrieval_bm_timeline_ensemble.json
-python -m src.train --config configs/claim_history/pairwise_bm_timeline_ensemble.json
-```
-
-`em_reconciled_bm_v3_l1_ensemble.json` (dashboard run **1180002**, requires
-`src/optional_requirements.txt`) adds exact EM reconciled veto, Bonus-Malus timeline v3 with
-joint expected-F1 cutoff, and calibrated \$1 < 48% L1 pricing, reaching **0.52301 F1 /
-92.58461 MAE** across seeds 41–45 on 20% matched holdouts.
-
-Across seeds 41–45, `count_retrieval_bm_timeline_ensemble.json` reached **0.52064 F1 /
-93.03928 MAE** on 20% matched holdouts (+0.01046 F1 over `pairwise_payout_ensemble`),
-**0.51241 F1** at 25% matched, **0.41303 F1** on 25% mixed holdouts (+0.01803 F1),
-and **0.15702 F1** on 25% profile-disjoint holdouts (+0.00930 F1). `pairwise_bm_timeline_ensemble.json`
-is the lighter option (**0.51671 F1 / 93.03937 MAE** at 20%, **0.51049 F1 / 92.11566 MAE**
-at 25%, **0.41292 F1** on 25% mixed). Both are published under **Bonus-Malus reference-window
-timeline (seeds 41–45)** in the dashboard; reproduce natively from `src/` with
-`python -m src.reproduce_timeline_models --cohorts matched_20 matched_25 mixed_25 disjoint_25`
-(no `analysis/` files required).
+- `configs/claim_history/count_retrieval_bm_timeline_ensemble.json` (**0.52064 F1 /
+  93.03928 MAE** at 20%, **0.51241 F1** at 25%, **0.41303 F1** on 25% mixed, **0.15702 F1**
+  on 25% disjoint) and lighter `configs/claim_history/pairwise_bm_timeline_ensemble.json`
+  (**0.51671 F1 / 93.03937 MAE** at 20%, **0.51049 F1 / 92.11566 MAE** at 25%). Both
+  reproduce natively via `python -m src.reproduce_timeline_models --cohorts matched_20 matched_25 mixed_25 disjoint_25`.
+- `configs/claim_history/pairwise_payout_ensemble.json` (**0.51018 F1 / 93.04831 MAE** at 20%,
+  **95.33733 MAE** on 25% mixed) and `configs/claim_history/payout_source_local_tail_ensemble.json`
+  (requires only `src/requirements.txt`).
 
 ## Reproduce the best F1 benchmark
 
