@@ -64,60 +64,72 @@ def study_source(results):
     }}
 
 
-def update_studies(payload, source):
+def update_studies(unified, source):
     source_id = source["id"]
-    unified = json.loads(payload)
-    # Older standalone copies expect a JSON object. Newer copies embed gzip as a JSON string.
-    compressed = isinstance(unified, str)
-    if compressed:
-        original_json = gzip.decompress(base64.b64decode(unified))
-        unified = json.loads(original_json)
     records = source["data"]["records"]
     kept = [row for row in unified["records"] if row["source"] != source_id]
     if {row.get("candidate") for row in kept} & {row["candidate"] for row in records}:
         raise ValueError("One or more study result candidate IDs are already in use.")
     unified["records"] = kept + records
     unified["sources"] = [entry for entry in unified["sources"] if entry["id"] != source_id] + [source]
-    updated_json = json.dumps(unified, ensure_ascii=False, allow_nan=False, separators=(",", ":")).replace("<", r"\u003c")
-    if compressed:
-        updated_bytes = updated_json.encode("utf-8")
-        if updated_bytes == original_json:
-            return payload
-        return json.dumps(base64.b64encode(gzip.compress(updated_bytes, mtime=0)).decode("ascii"))
-    return updated_json
+    return json.dumps(unified, ensure_ascii=False, allow_nan=False, separators=(",", ":")).replace("<", r"\u003c")
 
 
-def publish(dashboard, source):
-    source_id = source["id"]
-    original = dashboard.read_bytes().decode("utf-8")
+def update_legacy_dashboard(original, source):
     start = original.index(DATA_TAG) + len(DATA_TAG)
     stop = original.index("</script>", start)
-    payload = update_studies(original[start:stop], source)
+    payload = original[start:stop]
+    unified = json.loads(payload)
+    if isinstance(unified, str):
+        original_json = gzip.decompress(base64.b64decode(unified))
+        updated_json = update_studies(json.loads(original_json), source).encode("utf-8")
+        if updated_json != original_json:
+            payload = json.dumps(base64.b64encode(gzip.compress(updated_json, mtime=0)).decode("ascii"))
+    else:
+        payload = update_studies(unified, source)
     updated = original[:start] + payload + original[stop:]
 
     start = updated.index(REPRODUCTION_MARKER)
     stop = updated.index("</script>", start)
-    script = (ROOT / "analysis/dashboard/reproduction.js").read_text(encoding="utf-8").strip()
+    script = (ROOT / "dashboard/js/reproduction.js").read_text(encoding="utf-8").strip()
     if "\r\n" in original:
         script = script.replace("\n", "\r\n")
-    updated = updated[:start] + script + updated[stop:]
-    if updated == original:
-        return
-    with NamedTemporaryFile(dir=dashboard.parent, prefix=f".{source_id}-", delete=False) as stream:
-        staging = Path(stream.name)
-        stream.write(updated.encode("utf-8"))
+    return updated[:start] + script + updated[stop:]
+
+
+def replace_file(target, content):
+    staging = None
     try:
+        with NamedTemporaryFile(dir=target.parent, prefix=f".{target.name}-", delete=False) as stream:
+            staging = Path(stream.name)
+            stream.write(content)
         # Windows can briefly lock a large dashboard during scanning or preview.
         for attempt in range(4):
             try:
-                staging.replace(dashboard)
+                staging.replace(target)
                 break
             except PermissionError as error:
                 if getattr(error, "winerror", None) not in (5, 32, 33) or attempt == 3:
                     raise
                 sleep(.25 * 2 ** attempt)
     finally:
-        staging.unlink(missing_ok=True)
+        if staging is not None:
+            staging.unlink(missing_ok=True)
+
+
+def publish(dashboard, source):
+    original = dashboard.read_bytes()
+    if DATA_TAG.encode("ascii") in original:
+        updated = update_legacy_dashboard(original.decode("utf-8"), source).encode("utf-8")
+        if updated != original:
+            replace_file(dashboard, updated)
+        return
+
+    studies = dashboard.parent / "data" / "studies.json.gz"
+    original_json = gzip.decompress(studies.read_bytes())
+    updated_json = update_studies(json.loads(original_json), source).encode("utf-8")
+    if updated_json != original_json:
+        replace_file(studies, gzip.compress(updated_json, mtime=0))
 
 
 def main(argv=None):

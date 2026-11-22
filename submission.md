@@ -266,3 +266,28 @@ and recorded 0.160 configuration for `2_2_10`.
 - Exact model settings: `configs/checkpoint2/2_2_10.json`.
 - Training data: all 70,000 rows (3,335 positive claims); seed 42; training MAE **91.589141**.
 - Per validation seed: 52,500 training rows / 17,500 held-out rows.
+
+## Final competition candidates
+
+These are the two five-seed matched-holdout candidates published in the
+**Near-zero pricing for low-confidence flags (seeds 41–45)** dashboard source.
+They are validation records, not competition-set scores.
+
+| Dashboard ID | Eval % | Seeds | Mean MAE | Lowest seed MAE | All-zero mean MAE | Improvement | Precision | Recall | Mean F1 | Aggregate points |
+|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1170004 | 25% | 41–45 | 91.8557 | 85.5097 | 101.5314 | 9.46% | 49.84% | 52.73% | 0.5123 | 98.98 |
+| 1170002 | 20% | 41–45 | 92.6999 | 81.5535 | 102.5418 | 9.46% | 50.62% | 53.22% | 0.5189 | 100.00 |
+
+### 1170004 — 25% matched holdout
+
+- Model: Count-retrieval + French Bonus-Malus timeline with $1 below 45% claim risk.
+- Base configuration: `configs/claim_history/count_retrieval_bm_timeline_ensemble.json`.
+- Post-processing: write $1 for flagged rows whose claim risk is below 0.45.
+- Dashboard status: Lowest mean MAE on matched holdouts.
+
+### 1170002 — 20% matched holdout
+
+- Model: Count-retrieval + French Bonus-Malus timeline with $1 below 45% claim risk.
+- Base configuration: `configs/claim_history/count_retrieval_bm_timeline_ensemble.json`.
+- Post-processing: write $1 for flagged rows whose claim risk is below 0.45.
+- Dashboard status: Lowest mean MAE on matched holdouts.
