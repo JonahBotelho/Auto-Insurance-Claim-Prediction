@@ -47,9 +47,15 @@ For the strongest deployable F1 (using only the 18 input features, with calibrat
 French Bonus-Malus reference-window cold detection), train with either:
 
 ```powershell
+python -m src.train --config configs/claim_history/em_reconciled_bm_v3_l1_ensemble.json
 python -m src.train --config configs/claim_history/count_retrieval_bm_timeline_ensemble.json
 python -m src.train --config configs/claim_history/pairwise_bm_timeline_ensemble.json
 ```
+
+`em_reconciled_bm_v3_l1_ensemble.json` (dashboard run **1180002**, requires
+`src/optional_requirements.txt`) adds exact EM reconciled veto, Bonus-Malus timeline v3 with
+joint expected-F1 cutoff, and calibrated \$1 < 48% L1 pricing, reaching **0.52301 F1 /
+92.58461 MAE** across seeds 41–45 on 20% matched holdouts.
 
 Across seeds 41–45, `count_retrieval_bm_timeline_ensemble.json` reached **0.52064 F1 /
 93.03928 MAE** on 20% matched holdouts (+0.01046 F1 over `pairwise_payout_ensemble`),
@@ -290,6 +296,12 @@ After caching `matched_20` and `matched_25`, run `python -m analysis.publish_fin
 and select **Near-zero pricing for low-confidence flags (seeds 41–45)** in the dashboard.
 It shows the rule and a rerun control for each holdout size. The rule is not yet
 applied by `src.predict`.
+
+Run `python -m analysis.evaluate_and_publish_em_timeline` (after caching `matched_20` and
+`matched_25`) to reproduce and publish **EM reconciled veto + BM timeline v3 & calibrated L1
+pricing (seeds 41–45)** (runs `1180001–1180004`), which reached **0.52301 F1 / 92.585 MAE** on
+20% holdouts and **0.51424 F1 / 91.640 MAE** on 25% holdouts. Run `1180002` is deployable via
+`configs/claim_history/em_reconciled_bm_v3_l1_ensemble.json`.
 
 ### Known-profile reranking archive
 

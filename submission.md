@@ -267,27 +267,44 @@ and recorded 0.160 configuration for `2_2_10`.
 - Training data: all 70,000 rows (3,335 positive claims); seed 42; training MAE **91.589141**.
 - Per validation seed: 52,500 training rows / 17,500 held-out rows.
 
-## Final competition candidates
+## Final competition submission
 
-These are the two five-seed matched-holdout candidates published in the
-**Near-zero pricing for low-confidence flags (seeds 41–45)** dashboard source.
-They are validation records, not competition-set scores.
+The selected final competition model is dashboard run **1180002**
+(`configs/claim_history/em_reconciled_bm_v3_l1_ensemble.json`), published in the
+**EM reconciled veto + BM timeline v3 & calibrated L1 pricing (seeds 41–45)**
+dashboard source. It runs natively from `src/` with no `analysis/` dependencies.
 
-| Dashboard ID | Eval % | Seeds | Mean MAE | Lowest seed MAE | All-zero mean MAE | Improvement | Precision | Recall | Mean F1 | Aggregate points |
-|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| 1170004 | 25% | 41–45 | 91.8557 | 85.5097 | 101.5314 | 9.46% | 49.84% | 52.73% | 0.5123 | 98.98 |
-| 1170002 | 20% | 41–45 | 92.6999 | 81.5535 | 102.5418 | 9.46% | 50.62% | 53.22% | 0.5189 | 100.00 |
+From the repository root, install dependencies, train on all 70,000 rows of
+`data/trainingset.csv`, and predict on any new competition CSV:
 
-### 1170004 — 25% matched holdout
+```powershell
+python -m pip install -r src/optional_requirements.txt
+python -m src.train --config configs/claim_history/em_reconciled_bm_v3_l1_ensemble.json
+python -m src.predict --input "C:\path\to\new_testset.csv" --output "C:\path\to\submission.csv"
+```
 
-- Model: Count-retrieval + French Bonus-Malus timeline with $1 below 45% claim risk.
-- Base configuration: `configs/claim_history/count_retrieval_bm_timeline_ensemble.json`.
-- Post-processing: write $1 for flagged rows whose claim risk is below 0.45.
-- Dashboard status: Lowest mean MAE on matched holdouts.
+Press Enter at the confirmation prompt to start training. Training saves
+`models/two_stage_claim_model.joblib` using seed 42; use `--model-path` with
+`src.predict` if the saved model is stored elsewhere. The input CSV needs
+`rowIndex` and the same 18 feature columns as `data/testset.csv`; claim labels
+are unnecessary. The output contains `rowIndex,ClaimAmount` in input row order.
 
-### 1170002 — 20% matched holdout
+Validation metrics below are five-seed matched-holdout records (`41–45`), not
+competition-set scores.
 
-- Model: Count-retrieval + French Bonus-Malus timeline with $1 below 45% claim risk.
-- Base configuration: `configs/claim_history/count_retrieval_bm_timeline_ensemble.json`.
-- Post-processing: write $1 for flagged rows whose claim risk is below 0.45.
-- Dashboard status: Lowest mean MAE on matched holdouts.
+| Dashboard ID | Eval % | Seeds | Mean MAE | Lowest seed MAE | All-zero mean MAE | Improvement | Precision | Recall | Mean F1 |
+|---|---:|---|---:|---:|---:|---:|---:|---:|---:|
+| **1180002** *(selected)* | 20% | 41–45 | **92.5855** | **81.3055** | 102.5418 | **9.58%** | **51.47%** | **53.16%** | **0.52301** |
+| **1180004** | 25% | 41–45 | **91.6402** | **85.4606** | 101.5314 | **9.67%** | **50.89%** | **51.99%** | **0.51424** |
+
+### 1180002 — 20% matched holdout (selected final model)
+
+- Model: `EMTimelineClaimEnsemble` — Count-retrieval + EM reconciled veto + Bonus-Malus timeline v3 (joint expected-F1 cutoff) + calibrated \$1 < 48% L1 pricing.
+- Deployable configuration: `configs/claim_history/em_reconciled_bm_v3_l1_ensemble.json` (native `src/` 5-seed reproduction: **0.523010 F1**, **92.58461 MAE**).
+- Training data: all 70,000 rows (3,335 positive claims) from `data/trainingset.csv`; seed 42; uses only the 18 input features (`rowIndex` excluded from model inputs).
+- Dashboard status: Highest 5-seed F1 and lowest MAE on matched holdouts (supersedes runs `1170002` and `1160003`).
+
+### 1180004 — 25% matched holdout (companion validation check)
+
+- Model: Same `EMTimelineClaimEnsemble` architecture evaluated on 25% matched holdouts (seeds 41–45).
+- Dashboard status: Highest 5-seed F1 and lowest MAE on 25% matched holdouts (supersedes runs `1170004` and `1160006`).

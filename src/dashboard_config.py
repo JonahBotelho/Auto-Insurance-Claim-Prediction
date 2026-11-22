@@ -26,7 +26,8 @@ def validate_dashboard_config(config):
                "aggregate_payout_pricing", "profile_history_ensemble", "template_claim_ensemble",
                "payout_source_calibration", "source_tail_pricing", "cold_profile_fallback", "cold_payout_tail_pricing",
                "cold_exposure_hazard", "local_tail_pricing", "pairwise_payout_ranking",
-               "bonus_malus_timeline", "count_retrieval_refinement"}
+               "bonus_malus_timeline", "count_retrieval_refinement",
+               "em_reconciled_bm_v3", "calibrated_l1_pricing"}
     if not isinstance(config, dict) or set(config) - allowed:
         raise ValueError("Unknown configuration fields or invalid JSON configuration object.")
     if type(config.get("schema_version")) is not int or config["schema_version"] != CONFIG_FILE_SCHEMA_VERSION:
@@ -92,6 +93,14 @@ def validate_dashboard_config(config):
         raise ValueError("Count-retrieval refinement must be true or false.")
     if config.get("count_retrieval_refinement") and not config.get("bonus_malus_timeline"):
         raise ValueError("Count-retrieval refinement requires Bonus-Malus timeline detection.")
+    if type(config.get("em_reconciled_bm_v3", False)) is not bool:
+        raise ValueError("EM reconciled BM v3 mode must be true or false.")
+    if config.get("em_reconciled_bm_v3") and not config.get("count_retrieval_refinement"):
+        raise ValueError("EM reconciled BM v3 mode requires count-retrieval refinement.")
+    if type(config.get("calibrated_l1_pricing", False)) is not bool:
+        raise ValueError("Calibrated L1 pricing must be true or false.")
+    if config.get("calibrated_l1_pricing") and not config.get("em_reconciled_bm_v3"):
+        raise ValueError("Calibrated L1 pricing requires EM reconciled BM v3 mode.")
     if type(config.get("source_tail_pricing", False)) is not bool:
         raise ValueError("Source-tail pricing must be true or false.")
     if config.get("source_tail_pricing") and not config.get("payout_source_calibration"):
@@ -150,6 +159,16 @@ def build_dashboard_model(config, threshold):
                 ColdExposureHazardClaimEnsemble, ColdPayoutTailClaimEnsemble, ColdProfileClaimEnsemble,
                 LocalTailClaimEnsemble, PayoutSourceClaimEnsemble, SourceTailClaimEnsemble,
             )
+            if config.get("em_reconciled_bm_v3"):
+                from src.bonus_malus_claim_ensemble import EMTimelineClaimEnsemble
+
+                default_alpha = max(0.55, min(0.92, 1.0 - float(config.get("evaluation_percent", 20)) / 100.0))
+                return EMTimelineClaimEnsemble(
+                    baseline, claim_probability_threshold=threshold,
+                    n_splits=config.get("n_splits", DEFAULT_CV_FOLDS), random_seed=config["random_seed"],
+                    calibrated_l1_pricing=config.get("calibrated_l1_pricing", False),
+                    default_alpha=default_alpha,
+                )
             if config.get("count_retrieval_refinement"):
                 from src.bonus_malus_claim_ensemble import CountRetrievalTimelineClaimEnsemble
 
@@ -204,6 +223,10 @@ def print_dashboard_configuration(settings):
         print("Warm refinement: count-hurdle agreement and dual leaf-retrieval admissions")
     if config.get("bonus_malus_timeline"):
         print("Cold detection: calibrated French Bonus-Malus reference-window timeline detector")
+    if config.get("em_reconciled_bm_v3"):
+        print("Warm/cold upgrade: EM reconciled veto + Bonus-Malus timeline v3 with joint expected-F1 cutoff")
+    if config.get("calibrated_l1_pricing"):
+        print("Calibrated L1 pricing: $1 floor when calibrated claim risk (0.50*anchor + 0.50*clean_warm) < 0.48")
     if config.get("source_tail_pricing"):
         print("Payout floor: source-specific fitted lower tails")
     if config.get("local_tail_pricing"):
