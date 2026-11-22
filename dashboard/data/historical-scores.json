@@ -1,0 +1,12 @@
+{
+  "parts": [
+    {
+      "name": "historical-scores-01.bin",
+      "bytes": 33554432
+    },
+    {
+      "name": "historical-scores-02.bin",
+      "bytes": 22256609
+    }
+  ]
+}

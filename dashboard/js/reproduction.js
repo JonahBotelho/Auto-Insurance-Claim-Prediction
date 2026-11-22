@@ -5,6 +5,14 @@ const severityDescriptions = {
   profile_median:"Unweighted profile median, with Ridge fallback",
   mixture_quantile:"Profile residual quantile, with minimum quantile 0.05",
   blended_weighted_profile:"Blended probability × primary model profile median",
+  median_payout:"Median payout with tune 264 pricing for profiles without positive history",
+  conditional_payout:"Conditional median of zero, repeated and novel payout outcomes",
+  aggregate_payout:"Conditional median using observed payouts and components of scaled totals",
+  relative_payout:"Conditional median with novel payouts estimated relative to the profile history",
+  component_payout:"Conditional median from repeatable payouts and inferred missing components",
+  cold_pooled_tail:"Pooled fitting second-percentile payout with the configured multiplier",
+  cold_marked_tail:"Fitting second-percentile payout weighted by the predicted payout source",
+  ordinal_survival:"Payout quote inferred from the fitted survival curve",
 };
 
 function trainingConfiguration(row) {
@@ -40,7 +48,68 @@ function trainingConfigInputs(row) {
   return JSON.stringify(trainingConfiguration(row),null,2) + "\n";
 }
 
+function usesMatchedHoldouts(row) {
+  return ["profile_reranking","fixed_flag_severity","no_positive_history","known_profile_coverage","claim_pruning",
+    "batch_claim_detection","claim_detector_comparison","payout_signatures","claim_coverage_screen","profile_structure"].includes(row.reproduction);
+}
+
 function reproductionPlan(row) {
+  if (row.reproduction === "profile_generalization") {
+    return {mode:"analysis",badge:"Profile generalization",prompts:[],command:row.reproduction_command,
+      note:row.reproduction_note || "Run the group-disjoint reference before the cold-start calibration.",
+      footnote:"Each evaluation holds out at least 20% of the labeled rows. The split definition is in the run's command."};
+  }
+  if (row.reproduction === "profile_structure") {
+    const command = row.opt_in_config ? "python -m src.train --config " + row.opt_in_config : row.reproduction_command;
+    return {mode:"analysis",badge:"Profile structure study",prompts:[],command,
+      note:row.reproduction_note || (row.opt_in_config ? "Train the opt-in configuration from the repository root."
+        : "Generate the median-pricing study outputs and run the corresponding profile experiments."),
+      footnote:"The dashboard aggregates five matching holdouts. Reserved-split checks are in the source download."};
+  }
+  if (row.reproduction === "payout_signatures") {
+    return {mode:"analysis",badge:"Median pricing and detection",prompts:[],
+      command:"python -m analysis.evaluate_payout_signatures --output-dir analysis/output/payout_signatures_rerun",
+      note:"Evaluate all configurations on the matched 25% holdouts for seeds 41–45.",
+      footnote:"The fixed CatBoost median-pricing recipe was also evaluated on reserved seed 2601."};
+  }
+  if (row.reproduction === "claim_coverage_screen") {
+    return {mode:"analysis",badge:"Claim coverage screen",prompts:[],
+      command:"python -m analysis.screen_claim_coverage --results analysis/output/payout_signatures_rerun",
+      note:"Run the median-pricing and detection study first. The screen adds the 100 highest-ranked rows with no positive history.",
+      footnote:"The fixed addition budget measures candidate precision on seeds 41–45."};
+  }
+  if (row.reproduction === "claim_detector_comparison") {
+    return {mode:"analysis",badge:"Experiment 7",prompts:[],
+      command:"python -m analysis.evaluate_claim_detectors --output-dir analysis/output/claim_detector_comparison_rerun",
+      note:"Replay the controls and evaluate both challengers on seeds 41–45.",
+      footnote:"The dashboard scores are historical. Confirmation status and learned cutoffs are saved with the study."};
+  }
+  if (row.reproduction === "batch_claim_detection") {
+    return {mode:"missing",badge:"Archived experiment",
+      note:"Tune 264 was retained after development. Scores and predictions are in analysis/output/batch_claim_detection/."};
+  }
+  if (row.reproduction === "claim_pruning") {
+    return {mode:"missing",badge:"Archived experiment",
+      note:"Tune 264 was retained after development. Scores and predictions are in analysis/output/claim_pruning/."};
+  }
+  if (row.reproduction === "known_profile_coverage") {
+    return {mode:"analysis",badge:"Historical-size comparison",prompts:[],
+      command:"python -m analysis.evaluate_known_profile_coverage --output-dir analysis/output/known_profile_coverage_rerun",
+      note:"Evaluate four coverage rules on tune 264's historical splits. The runner also compares 42,000 fitting rows on the same holdouts.",
+      footnote:"Choose a fresh output directory for each run."};
+  }
+  if (row.reproduction === "no_positive_history") {
+    return {mode:"missing",badge:"Archived experiment",
+      note:"Tune 264 was retained after development. Saved scores and predictions are in analysis/output/no_positive_history/."};
+  }
+  if (row.reproduction === "fixed_flag_severity") {
+    return {mode:"missing",badge:"Archived experiment",
+      note:"Tune 264 was retained after development. Saved scores and predictions are in analysis/output/fixed_flag_severity/."};
+  }
+  if (row.reproduction === "profile_reranking") {
+    return {mode:"missing",badge:"Archived experiment",
+      note:"The experiment stopped after development and its runner was removed. Saved predictions and split manifests are in analysis/output/known_profile_reranking_41_45/."};
+  }
   if (row.submission) {
     return {mode:"analysis",badge:"Checkpoint 2",prompts:[],
       command:"python -m src.generate_checkpoint2_candidates --submission "+row.submission+" --seed "+row.training_seed,
@@ -84,8 +153,38 @@ function renderResultSummary(row) {
     card.append(name,value); elements.dialogMetrics.append(card);
   }
   elements.dialogContext.replaceChildren();
-  for (const label of [row.evaluation_percent + "% holdout", "Seeds " + ((row.seeds || []).join(", ") || "unavailable"),
-    row.hasMetrics ? "Threshold " + decimal(row.threshold,3) : "No saved metrics",
+  const thresholdLabel = usesMatchedHoldouts(row) ? "Incumbent threshold " : "Threshold ";
+  const thresholdText = row.threshold_method === "experiment7_oof"
+    ? "Cutoffs fitted per seed"
+    : row.threshold_method === "experiment7_blend" ? "Average log-odds margin ≥ 0"
+    : row.threshold_method === "coverage_top_100" ? "100 additions ranked per split"
+    : row.threshold_method === "coverage_top_25" ? "25 additions ranked per split"
+    : row.threshold_method === "coverage_top_10" ? "10 additions ranked per split"
+    : row.threshold_method === "exposure_link" ? "Maximum difference in feature1 " + decimal(row.threshold,3)
+    : row.threshold_method === "expected_f1" ? "Cutoff selected from expected F1"
+    : row.threshold_method === "bootstrap_majority" ? "Flag when more than half of fitted-profile resamples agree"
+    : row.threshold_method === "detector_agreement" ? "Apply an agreement rule to the fitted classifiers' flags"
+    : row.threshold_method === "source_prune" ? "Reference flags with corrected probability of at least 0.22"
+    : row.threshold_method === "reference_volume" ? "Reference flag count retained after reranking"
+    : row.threshold_method === "fixed_flags" ? "Same claim flags as the reference detector"
+    : row.threshold_method === "component_veto" ? "Veto supported flags below claim probability " + decimal(row.threshold,3)
+    : row.threshold_method === "cold_hazard_gate" ? "Add no-history flags at claim probability " + decimal(row.threshold,3) + " or above"
+    : row.threshold_method === "marginal_f1" ? "Add no-history flags when they improve expected portfolio F1"
+    : row.threshold_method === "reduced_flag_volume" ? "Rerank at 95% of the reference flag count"
+    : row.threshold_method === "reference_cutoff" ? "Apply the reference cutoff to adjusted claim risk"
+    : row.threshold_method === "profile_presence_veto" ? "Reference flags with profile-presence risk of at least 0.25"
+    : row.threshold_method === "replicated_risk" ? "Add no-history flags only when independently confirmed risk clears 25%"
+    : row.threshold_method === "integrated_expected_f1" ? "Optimize expected F1 over the predictive claim-count distribution"
+    : row.threshold_method === "majority_five" ? "Flag when at least three of five detectors agree"
+    : row.threshold_method === "override_vote_five" ? "Change a profile-presence decision only on four-model agreement"
+    : row.threshold_method === "prune_vote_five" ? "Prune a profile-presence flag rejected by four of five detectors"
+    : ["claim_detector_comparison","payout_signatures","profile_structure"].includes(row.reproduction) && !row.threshold_method
+    ? "Threshold " + decimal(row.threshold,3)
+    : row.threshold_method === "nested_f1"
+    ? "Mean selected threshold " + decimal(row.per_seed.reduce((sum, seed) => sum + seed.threshold, 0) / row.per_seed.length, 3)
+    : thresholdLabel + decimal(row.threshold,3);
+  for (const label of [row.evaluation_label || row.evaluation_percent + "% holdout", "Seeds " + ((row.seeds || []).join(", ") || "unavailable"),
+    row.hasMetrics ? thresholdText : "No saved metrics",
     ...(row.hasMetrics ? ["Amount × " + row.scale] : [])]) {
     const chip = document.createElement("span"); chip.textContent = label; elements.dialogContext.append(chip);
   }
@@ -134,10 +233,17 @@ function renderReproduction(row) {
 
 function renderModelDetails(row) {
   const settings = row.settings || {};
+  const unseenProfiles = row.reproduction === "profile_generalization";
+  const reference = row.comparison_label || (unseenProfiles ? "payout-source ensemble" : "tune 264");
+  const pairedDelta = key => (usesMatchedHoldouts(row) || unseenProfiles) && row.per_seed.every(score=>Number.isFinite(score[key]))
+    ? decimal(row.per_seed.reduce((total, score) => total + score[key], 0) / row.per_seed.length, 6)
+    : null;
   fillDefinitions(elements.settingsList, [
     ["Status",row.status || "Historical fit"],["Classifier",row.classifier || "Histogram Gradient Boosting"],
     ["Sources",row.source_ids.join(', ')],
     ["Evaluation rows by seed",row.per_seed.map(score=>score.seed+': '+numbers.format(score.rows)).join(', ')],
+    ["Model fitting seed",row.model_seed],["MAE change vs " + reference,pairedDelta("delta_mae")],
+    ["F1 change vs " + reference,pairedDelta("delta_f1")],
     ["MAE points",row.mae_points?.toFixed(2)],["F1 points",row.f1_points?.toFixed(2)],["Aggregate points",row.aggregate?.toFixed(2)],
     ["Boosting iterations",settings.iterations ?? row.max_iter],["Learning rate",settings.rate ?? row.learning_rate],
     ["Maximum leaf nodes",settings.leaves ?? row.max_leaf_nodes],["Depth",settings.depth],
@@ -147,6 +253,9 @@ function renderModelDetails(row) {
     ["Oversampling target",settings.oversampling!=null ? settings.oversampling + "%" : "See blend components"],["Oversampling sampling seed",42],
     ["Profile-history smoothing",settings.smoothing],["Past claim amount feature",settings.amount_history ? "Enabled" : "Disabled"],
     ["Extended amount history",settings.extended_amount_history ? "Past log-amount variance and whole-cent share" : null],
+    ["Profile amount relationships",settings.profile_amount_relationships],
+    ["Experiment amount rule",row.severity_experiment_rule],
+    ["Experiment cap on adjusted amounts",row.severity_experiment_cap],
     ["Severity rule",severityDescriptions[row.severity_method || "weighted_profile"]],
     ["Ridge alpha",row.hasMetrics ? row.alpha : null],["Amount cap before multiplier",row.amount_cap],
     ["Blend components",settings.family==='checkpoint_blend' ? JSON.stringify(settings) : null],
@@ -154,7 +263,7 @@ function renderModelDetails(row) {
 }
 
 function showRunDetails(row) {
-  elements.reproductionSeed.closest("label").hidden = Boolean(row.submission);
+  elements.reproductionSeed.closest("label").hidden = Boolean(row.submission) || usesMatchedHoldouts(row);
   elements.reproductionSeed.replaceChildren();
   for (const seed of row.seeds?.length ? row.seeds : [row.seed ?? 42]) {
     const option = document.createElement("option"); option.value = seed; option.textContent = seed;

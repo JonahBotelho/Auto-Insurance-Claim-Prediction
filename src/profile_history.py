@@ -25,9 +25,12 @@ class ProfileHistory:
         )["_profile_amount"].median()
         return self
 
-    def transform(self, features, own_claim=None):
+    def _counts_for(self, features):
         index = pd.MultiIndex.from_frame(features[ALL_FEATURE_COLUMNS])
-        lookup = self.counts_.reindex(index).fillna(0)
+        return self.counts_.reindex(index).fillna(0)
+
+    def transform(self, features, own_claim=None):
+        lookup = self._counts_for(features)
         count = lookup["size"].to_numpy(dtype=float)
         claims = lookup["sum"].to_numpy(dtype=float)
         if own_claim is not None:

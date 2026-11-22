@@ -18,6 +18,8 @@ function initializeGroups(runs,records) {
   function groupFor(run) {
     const settings=classifierSettings(run),key=stableKey({settings,evaluation:run.evaluation_percent,
       severity:run.severity_method || 'weighted_profile',cap:run.amount_cap ?? null,folds:run.folds ?? 5,
+      // Matched reranking cohorts use their own fitted partitions and flag quotas.
+      ...(run.evaluation_cohort ? {cohort:run.evaluation_cohort} : {}),
       // A submitted configuration keeps its documented holdouts even in All sources.
       ...(run.submission ? {submission:run.submission} : {})});
     if (!indexed.has(key)) indexed.set(key,{id:indexed.size+1,key,runs:[],records:[],settings});
@@ -46,9 +48,11 @@ function observation(reference) {
     mae:data.getFloat64(reference+10,true),baseline_mae:run.zero_mae,precision:tp+fp ? tp/(tp+fp) : 0,
     recall:tp/run.claims,tp,fp,rows:run.holdout_rows,claims:run.claims};
 }
+function claimF1({precision, recall}) {
+  return precision + recall ? 2 * precision * recall / (precision + recall) : 0;
+}
 function aggregatePoint(group,references,point,filters) {
-  const observations=references.map(observation).map(score=>({...score,
-    f1:score.precision+score.recall ? 2*score.precision*score.recall/(score.precision+score.recall) : 0}));
+  const observations=references.map(observation).map(score=>({...score,f1:claimF1(score)}));
   const unique=new Map();let conflicts=0;
   for (const score of observations) {
     const previous=unique.get(score.seed);
@@ -75,11 +79,10 @@ function aggregatePoint(group,references,point,filters) {
     threshold:point[0],alpha:point[1],scale:point[2],reproduction:group.records.find(row=>row.reproduction)?.reproduction};
 }
 function matches(row,filters) {
-  return !((filters.maeMin!==null && row.mae<filters.maeMin) || (filters.maeMax!==null && row.mae>filters.maeMax)
-    || (filters.precisionMin!==null && row.precision*100<filters.precisionMin)
-    || (filters.precisionMax!==null && row.precision*100>filters.precisionMax)
-    || (filters.recallMin!==null && row.recall*100<filters.recallMin)
-    || (filters.recallMax!==null && row.recall*100>filters.recallMax));
+  return (filters.maeMax === null || row.mae <= filters.maeMax)
+    && (filters.precisionMin === null || row.precision * 100 >= filters.precisionMin)
+    && (filters.recallMin === null || row.recall * 100 >= filters.recallMin)
+    && (filters.f1Min == null || (row.f1 ?? claimF1(row)) >= filters.f1Min);
 }
 function better(row,best) {
   if (!best) return true;

@@ -1,4 +1,7 @@
 /* Query original binary scores together with every retained study observation. */
+importScripts("checkpoint_points.js", "grouping.js" + self.location.search, "data.js");
+
+const dataDirectory = new URL("../data/", self.location.href);
 let data, historicalLoad, historicalCount;
 function allowedSeed(seed,filters) {return filters.seed===null || filters.seed===undefined || seed===filters.seed;}
 function historicalScore(offset,run) {
@@ -100,8 +103,7 @@ function query(filters) {
     }
   }
   const rows=favourites ? savedRows : [...best.values()];
-  const bounded=['maeMin','maeMax','precisionMin','precisionMax','recallMin','recallMax'].some(key=>filters[key]!==null);
-  if (filters.includeMissing && !bounded && filters.minimumSeeds===1 && (!filters.source || filters.source==='historical')) {
+  if (filters.includeMissing && filters.minimumSeeds===1 && (!filters.source || filters.source==='historical')) {
     for (const group of active) if (!best.has(group) && group.runs.length && group.runs.every(run=>run.qualifying===0)) {
       const first=group.runs[0];
       const key=favouriteKey(group,null,[]);
@@ -114,11 +116,11 @@ function query(filters) {
   // Several bookmarked points may share a settings group; View needs distinct display IDs.
   return favourites ? rows.map((row,index)=>({...row,fit_id:400000+index})) : rows;
 }
-async function loadHistoricalScores(payload) {
-  const bytes=Uint8Array.from(atob(payload),character=>character.charCodeAt(0));
-  const stream=new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
-  const buffer=await new Response(stream).arrayBuffer();
-  if (buffer.byteLength!==historicalCount*18) throw new Error('Embedded score data is incomplete.');
+async function loadHistoricalScores() {
+  const archive = await loadHistoricalArchive(dataDirectory);
+  const stream = archive.stream().pipeThrough(new DecompressionStream('gzip'));
+  const buffer = await new Response(stream).arrayBuffer();
+  if (buffer.byteLength !== historicalCount * 18) throw new Error('Historical score data is incomplete.');
   data=new DataView(buffer);
 }
 self.onmessage=async ({data:message})=>{
@@ -131,7 +133,10 @@ self.onmessage=async ({data:message})=>{
     }
     if (message.type==='query') {
       if (!message.filters.source || message.filters.source==='historical') {
-        historicalLoad ??= loadHistoricalScores(message.payload);
+        historicalLoad ??= loadHistoricalScores().catch(error => {
+          historicalLoad = undefined;
+          throw new Error('Unable to load historical scores. ' + error.message);
+        });
         await historicalLoad;
       }
       const rows=query(message.filters);

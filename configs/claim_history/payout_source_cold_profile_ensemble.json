@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "threshold": 0.25,
+  "evaluation_percent": 20,
+  "random_seed": 42,
+  "template_claim_ensemble": true,
+  "payout_source_calibration": true,
+  "source_tail_pricing": true,
+  "cold_profile_fallback": true,
+  "severity_method": "mixture_quantile",
+  "aggregate_payout_pricing": true,
+  "ridge_alpha": 0.01,
+  "severity_scale": 0.75,
+  "amount_cap": 3000,
+  "n_splits": 5,
+  "classifier": {
+    "amount_history": true,
+    "extended_amount_history": true,
+    "family": "hist",
+    "iterations": 125,
+    "rate": 0.06,
+    "leaves": 11,
+    "leaf": 100,
+    "l2": 50,
+    "oversampling": 0,
+    "smoothing": 0.25,
+    "early_stopping": false
+  }
+}

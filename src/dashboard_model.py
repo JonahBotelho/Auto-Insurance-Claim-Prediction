@@ -31,7 +31,8 @@ def _extended_amount_statistics(amounts):
 
 class DashboardClaimModel(RegressorMixin, BaseEstimator):
     def __init__(self, classifier_settings, claim_probability_threshold=.1, severity_method="weighted_profile",
-                 ridge_alpha=.01, severity_scale=1., amount_cap=None, random_seed=RANDOM_SEED):
+                 ridge_alpha=.01, severity_scale=1., amount_cap=None, random_seed=RANDOM_SEED,
+                 median_payout_pricing=False, aggregate_payout_pricing=False):
         self.classifier_settings = classifier_settings
         self.claim_probability_threshold = claim_probability_threshold
         self.severity_method = severity_method
@@ -39,6 +40,8 @@ class DashboardClaimModel(RegressorMixin, BaseEstimator):
         self.severity_scale = severity_scale
         self.amount_cap = amount_cap
         self.random_seed = random_seed
+        self.median_payout_pricing = median_payout_pricing
+        self.aggregate_payout_pricing = aggregate_payout_pricing
 
     def fit(self, features, amounts):
         settings = self.classifier_settings
@@ -59,6 +62,14 @@ class DashboardClaimModel(RegressorMixin, BaseEstimator):
             self.classifier_.fit(sampled, labels)
         self.regressor_ = build_claim_severity_pipeline(ridge_alpha=self.ridge_alpha)
         self.regressor_.fit(features.loc[amounts > 0], amounts[amounts > 0])
+        self.payout_pricer_ = None
+        self.aggregate_payout_model_ = None
+        if getattr(self, "median_payout_pricing", False):
+            from src.payout_pricing import MedianPayoutPricer
+            self.payout_pricer_ = MedianPayoutPricer().fit(features, amounts)
+        if getattr(self, "aggregate_payout_pricing", False):
+            from src.aggregate_payout_choices import AggregatePayoutChoices
+            self.aggregate_payout_model_ = AggregatePayoutChoices().fit(features, amounts)
         self.n_features_in_ = features.shape[1]
         return self
 
@@ -142,7 +153,14 @@ class DashboardClaimModel(RegressorMixin, BaseEstimator):
         # Caps apply to the base amount before its multiplier, matching saved runs.
         if self.amount_cap is not None:
             amount = np.minimum(self.amount_cap, amount)
-        return probability, amount * self.severity_scale
+        amount = amount * self.severity_scale
+        pricer = getattr(self, "payout_pricer_", None)
+        if pricer is not None:
+            amount = pricer.predict(features, amount)
+        aggregate = getattr(self, "aggregate_payout_model_", None)
+        if aggregate is not None:
+            _, amount = aggregate.predict(features, probability, amount)
+        return probability, amount
 
     def predict(self, features):
         probability, amount = self.predict_components(features)

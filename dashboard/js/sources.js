@@ -1,7 +1,7 @@
-/* Lossless source exports and source selection for the single dashboard. */
-function downloadPayload(name,value,type='application/json') {
-  const content=typeof value==='string' || value instanceof Uint8Array ? value : JSON.stringify(value,null,2);
-  const url=URL.createObjectURL(new Blob([content],{type})),link=document.createElement('a');
+/* Lossless source exports and source selection for the dashboard. */
+function downloadPayload(name,value) {
+  const blob=value instanceof Blob ? value : new Blob([JSON.stringify(value,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob),link=document.createElement('a');
   link.href=url;link.download=name;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 function setupSourceActions() {
@@ -10,9 +10,13 @@ function setupSourceActions() {
     control.addEventListener('click',action);elements.sourceDownloads.append(control);
   }
   button('Original historical metadata',()=>downloadPayload('historical.json',dataset));
-  button('Original historical scores (.gz)',()=>{
-    const bytes=Uint8Array.from(atob(elements['score-data'].textContent.trim()),character=>character.charCodeAt(0));
-    downloadPayload('historical_scores.gz',bytes,'application/gzip');
+  button('Original historical scores (.gz)',async ()=>{
+    try {
+      const archive = await loadHistoricalArchive(dataDirectory);
+      downloadPayload('historical_scores.gz', archive);
+    } catch (error) {
+      showError('Unable to download historical scores. ' + error.message);
+    }
   });
   for (const source of unified.sources) {
     if (!source.archived) {

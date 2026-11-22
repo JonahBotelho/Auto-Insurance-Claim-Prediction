@@ -1,0 +1,17 @@
+{
+  "training_sha256_lf": "1d4fbba946ebcaa2916b3a99743ffb9d490ab951f496725c7e51285827090c30",
+  "frozen_inputs": {
+    "anchor_score": "Matched calendar-anchor payout-history rank",
+    "cutoff": "Seed-specific cutoff for the calendar anchor",
+    "family_veto": "Ordinal and payout-history family vote quote",
+    "risk_supported_trim": "Family-vote quote after supported payout reduction"
+  },
+  "versions": {
+    "pandas": "3.0.1",
+    "numpy": "2.4.2",
+    "scikit-learn": "1.9.1",
+    "scipy": "1.18.1",
+    "lightgbm": "4.7.0",
+    "threadpoolctl": "3.7.0"
+  }
+}

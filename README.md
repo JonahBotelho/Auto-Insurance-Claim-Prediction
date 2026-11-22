@@ -9,6 +9,77 @@ Input datasets and the submission template are in `data/`:
 We evaluate claim amounts by **MAE** (lower is better) and claim detection by
 **F1**, the harmonic mean of precision and recall. A claim is `ClaimAmount > 0`.
 
+See the [claim model handoff](CLAIM_MODEL_HANDOFF.md) for verified results,
+competition setup, and directions for future experiments.
+
+## Final competition prediction
+
+From the repository root, install the dependencies and train one model:
+
+```powershell
+python -m pip install -r src/requirements.txt
+python -m src.train --config configs/claim_history/payout_source_local_tail_ensemble.json
+```
+
+Press Enter to confirm training. The config uses seed 42 and saves
+`models/two_stage_claim_model.joblib`. Seeds 41–45 are used for the benchmark
+below. If you already have the saved model, install the dependencies and skip
+training. Use `--model-path` to point to a model saved elsewhere.
+
+When the competition CSV arrives, replace the example paths and run:
+
+```powershell
+python -m src.predict --input "C:\path\competition.csv" --output "C:\path\submission.csv"
+```
+
+The input needs `rowIndex` and the same 18 feature columns as `data/testset.csv`.
+The submission contains `rowIndex` and `ClaimAmount` in the input row order.
+
+The pairwise payout model is another competition option. Install
+`src/optional_requirements.txt` and train with
+`python -m src.train --config configs/claim_history/pairwise_payout_ensemble.json`.
+It uses seed 42 and the same prediction command. On mixed-profile 25% holdouts,
+it reduced mean MAE from 96.06478 to 95.33733 with mean F1 near 0.395 for both
+models. The saved model contains the fitted history and needs only the new CSV
+at prediction time.
+
+For the strongest deployable F1 (using only the 18 input features, with calibrated
+French Bonus-Malus reference-window cold detection), train with either:
+
+```powershell
+python -m src.train --config configs/claim_history/em_reconciled_bm_v3_l1_ensemble.json
+python -m src.train --config configs/claim_history/count_retrieval_bm_timeline_ensemble.json
+python -m src.train --config configs/claim_history/pairwise_bm_timeline_ensemble.json
+```
+
+`em_reconciled_bm_v3_l1_ensemble.json` (dashboard run **1180002**, requires
+`src/optional_requirements.txt`) adds exact EM reconciled veto, Bonus-Malus timeline v3 with
+joint expected-F1 cutoff, and calibrated \$1 < 48% L1 pricing, reaching **0.52301 F1 /
+92.58461 MAE** across seeds 41–45 on 20% matched holdouts.
+
+Across seeds 41–45, `count_retrieval_bm_timeline_ensemble.json` reached **0.52064 F1 /
+93.03928 MAE** on 20% matched holdouts (+0.01046 F1 over `pairwise_payout_ensemble`),
+**0.51241 F1** at 25% matched, **0.41303 F1** on 25% mixed holdouts (+0.01803 F1),
+and **0.15702 F1** on 25% profile-disjoint holdouts (+0.00930 F1). `pairwise_bm_timeline_ensemble.json`
+is the lighter option (**0.51671 F1 / 93.03937 MAE** at 20%, **0.51049 F1 / 92.11566 MAE**
+at 25%, **0.41292 F1** on 25% mixed). Both are published under **Bonus-Malus reference-window
+timeline (seeds 41–45)** in the dashboard; reproduce natively from `src/` with
+`python -m src.reproduce_timeline_models --cohorts matched_20 matched_25 mixed_25 disjoint_25`
+(no `analysis/` files required).
+
+## Reproduce the best F1 benchmark
+
+From the repository root, run `python -m pip install -r src/requirements.txt`
+and `python -m src.reproduce_claim_benchmark`. The five-seed mean on 20% holdouts is
+**0.520785 F1 / 93.02023 MAE** for `review_additions_bm_timeline` (and **0.51468628 F1 /
+93.02916839 MAE** for `review_additions`). Add `--predictions claim_benchmark.csv.gz` to export the per-row predictions.
+
+The benchmark uses the original `data/trainingset.csv` and the frozen upstream
+anchor scores and baseline quotes in `src/reference/`. It refits the downstream
+models and scores the held-out rows. This command reproduces the historical
+benchmark and requires no `analysis/` files. The reference manifest records the
+package versions used for verification.
+
 ## Training and prediction
 
 Use Python 3.10 or newer and run commands from the repository folder:
@@ -69,7 +140,7 @@ smoothing 0.25, profile-median severity, Ridge alpha 0.01 and multiplier 1.4.
 Keep seed **44** at the last prompt; the fixed threshold makes CV fold count
 irrelevant to its holdout score. Expected holdout: MAE 94.1284, precision 47.40%,
 recall 44.72%. Saving still refits on all rows, so those are evaluation scores.
-For any dashboard result, choose **View → Download configuration**, place
+For a single-model dashboard result, choose **View → Download configuration**, place
 `run-<id>.json` in the repository folder, then run:
 
 ```powershell
@@ -103,6 +174,49 @@ variance of past positive log amounts and the share recorded to whole cents.
 Profile-median severity uses matching positive training claims,
 falling back to log-target Ridge for profiles without positive history.
 Training MAE is in-sample and profile summaries include those training rows.
+
+To use tune 264 with CatBoost median pricing, install
+`src/optional_requirements.txt` and run
+`python -m src.train --config configs/claim_history/tune_264_median_payout.json`.
+It keeps tune 264's claim flags and reprices matching profiles with positive
+history. The amount model fits on training rows with at least one other positive
+match and uses the same-profile payouts and zeros, excluding the current row.
+
+Run `python -m src.train --config configs/claim_history/tune_264_aggregate_payout.json`
+to price claims using the relationship between scaled totals and whole-cent payouts.
+For the experimental detector with that pricer, use
+`configs/claim_history/profile_history_ensemble.json`. The ensemble fits a
+calibrator on out-of-fold scores from the histogram, count and payout models.
+The count model uses a 100,000-row reference population. Probabilities can vary
+slightly with the rows scored in the same batch.
+
+Run `python -m src.train --config configs/claim_history/template_claim_ensemble.json`
+for the payout-template detector with profile-relative pricing. It chooses a
+cutoff from expected F1 for the scoring batch and caps prices at the fitting
+positives' 97th percentile, with a minimum cap of 2,250.
+
+With `src/optional_requirements.txt` installed, run
+`python -m src.train --config configs/claim_history/payout_source_claim_ensemble.json`
+for the opt-in variant that estimates separate whole-cent and scaled payout
+probabilities. It uses a 20% holdout for the training report.
+
+Use `configs/claim_history/payout_source_tail_ensemble.json` with the same
+training command to fit the payout floor from the lower tail of each source.
+The detector produces the same claim flags.
+Use `configs/claim_history/payout_source_local_tail_ensemble.json` to also reduce
+unsupported low quotes on low-risk profiles. On 20% and 25% holdouts with seeds
+41–45, mean MAE fell by 0.0080 and 0.0073 with identical claim flags.
+
+Use `configs/claim_history/payout_source_cold_profile_ensemble.json` to add
+CatBoost scoring for batches with no exact profiles in the fitting data.
+It uses rating features and counts of matching rows in the scoring batch.
+Use `configs/claim_history/payout_source_cold_profile_tail_ensemble.json` to
+also cap low-confidence quotes in those batches at the observed 2nd-percentile
+positive payout, after applying the configured amount multiplier.
+
+Use `configs/claim_history/payout_source_cold_exposure_hazard.json` to require
+exposure-hazard confirmation and price low-confidence claims by payout source
+when the scoring batch has entirely unfamiliar profiles.
 
 Enter accepts the displayed defaults, which match ordinary training;
 `--n-splits` sets the initial fold count and can be overridden at the prompt.
@@ -165,20 +279,332 @@ Install the analysis dependencies separately:
 python -m pip install -r analysis/requirements.txt
 ```
 
+### Final candidate search
+
+Fit the count-retrieval timeline model once per holdout and cache its per-row
+outputs, then score pricing and flag-volume variants by mean F1, then mean MAE:
+
+```powershell
+python -m analysis.cache_final_model_outputs --cohort matched_20 --seeds 41 42 43 44 45
+python -m analysis.evaluate_final_candidates --cohort matched_20
+```
+
+Writing $1 instead of the quoted price for flagged rows with risk below 0.45 kept F1
+and lowered mean MAE by 0.28 to 0.49 on 20% and 25% holdouts and fresh seeds 46–50.
+
+After caching `matched_20` and `matched_25`, run `python -m analysis.publish_final_candidates`
+and select **Near-zero pricing for low-confidence flags (seeds 41–45)** in the dashboard.
+It shows the rule and a rerun control for each holdout size. The rule is not yet
+applied by `src.predict`.
+
+Run `python -m analysis.evaluate_and_publish_em_timeline` (after caching `matched_20` and
+`matched_25`) to reproduce and publish **EM reconciled veto + BM timeline v3 & calibrated L1
+pricing (seeds 41–45)** (runs `1180001–1180004`), which reached **0.52301 F1 / 92.585 MAE** on
+20% holdouts and **0.51424 F1 / 91.640 MAE** on 25% holdouts. Run `1180002` is deployable via
+`configs/claim_history/em_reconciled_bm_v3_l1_ensemble.json`.
+
+### Known-profile reranking archive
+
+Select **Known-profile reranking** in the dashboard to review the matched
+development scores for seeds 41–45. Neither challenger passed the development
+gate, so tune 264 was retained. The split manifest, paired scores and row-level
+predictions are archived in `analysis/output/known_profile_reranking_41_45/`.
+The experimental training and prediction code was removed.
+
+### Fixed-flag severity archive
+
+Select **Fixed-flag severity** in the dashboard for the matched baseline and
+best challenger on seeds 41–45. The study retained tune 264 after development.
+Paired scores, row-level predictions and the split manifest are archived in
+`analysis/output/fixed_flag_severity/`.
+
+### No positive claim history archive
+
+Select **No positive claim history** in the dashboard for tune 264 and the
+best flag policy on matched seeds 41–45. All six specialist policies fell
+short of the development gate. Results and the split manifest are archived
+in `analysis/output/no_positive_history/`.
+
+### Historical-size coverage comparison
+
+Run `python -m analysis.evaluate_known_profile_coverage --output-dir analysis/output/known_profile_coverage_rerun`
+to compare tune 264 with broader flagging rules on the historical holdouts.
+Use a fresh output directory. The study retained tune 264. The dashboard
+shows the five-seed comparison, and the saved reports include the
+42,000-row fitting check on the same holdouts.
+
+### Claim pruning archive
+
+Select **Claim pruning (seeds 41–45)** in the dashboard for tune 264 and the
+best development policy. All four policies lost mean F1, so the study retained
+tune 264. Per-split scores, split IDs and predictions are archived in
+`analysis/output/claim_pruning/`.
+
+### Batch claim detection archive
+
+Select **Batch claim detection (seeds 41–45)** in the dashboard for tune 264
+and the refit control. Both challengers fell short of the F1 gate. The split
+IDs, thresholds, predictions, and batch-size check are saved in
+`analysis/output/batch_claim_detection/`.
+
+### F1 detector comparison
+
+Run `python -m analysis.evaluate_claim_detectors --output-dir analysis/output/claim_detector_comparison_rerun`
+to compare disagreement resolution and an all-row LightGBM ranker on seeds
+41–45. Install dependencies with `python -m pip install -r src/optional_requirements.txt`. The dashboard
+reports the highest F1 and the highest F1 within 2% of tune 264's MAE.
+Scores, predictions, and verdicts are under
+`analysis/output/claim_detector_comparison/`.
+
 ### Model dashboard
 
-Open `dashboard/index.html` for historical runs, both seed searches, fresh
-historical evaluations, and checkpoint results. Select **Checkpoint 2** for
-the ten final submissions from `submission.md` and their recorded holdouts,
+Start the local dashboard server from the repository root.
+
+```powershell
+python -m http.server 8000 --bind 127.0.0.1 --directory dashboard
+```
+
+Open `http://127.0.0.1:8000/` for historical runs, both seed searches, fresh
+historical evaluations, and checkpoint results. The server works offline.
+Select **Checkpoint 2** for the ten final submissions from `submission.md` and
+their recorded holdouts,
 including the 95/5 run as `2_2_1`.
 Their aggregate points use the dashboard formula below. **Historical checkpoint
 blends** contains the earlier five-seed blend evaluations.
+
+Select **Median pricing and claim detection (seeds 41–45)** for the matched 25%
+holdouts. Median pricing reduced mean MAE from 97.66 to 96.72 and kept F1 at
+0.4989. The best detector reached 0.4993 F1 in development. The reserved split
+confirmed the pricing gain with identical flags. Reproduce the study with
+`python -m analysis.evaluate_payout_signatures`, then run
+`python -m analysis.screen_claim_coverage` for the additional detection screen.
+
+Select **Profile structure and payout totals (seeds 41–45)** for the count,
+payout-component and ensemble experiments. On the 25% holdouts, the experimental
+ensemble with aggregate pricing reached 0.5031 F1 and 95.21 MAE. Tune 264 with
+aggregate pricing reached 95.18 MAE with the original flags. The dashboard
+includes a separate 20% fitting-size comparison.
+
+Select **Payout-model verification and claim risk (seeds 41–45)** for the
+relative-pricing model and new detection screens. The model scored 0.5036 F1
+and 93.13 MAE on 25% holdouts, and 0.5046 F1 and 93.68 MAE on 20% holdouts.
+Reproduce either comparison with `python -m analysis.verify_template_ensemble`
+and the matching `--percent` value.
+The optional TabICLv2 screen uses TabICL 2.2.0 and the
+[official classifier checkpoint](https://huggingface.co/jingang/TabICL/blob/main/tabicl-classifier-v2-20260212.ckpt)
+in `models/`. Run `python -m analysis.evaluate_foundation_profile` locally.
+
+Select **Claim decisions and portfolio transfer (seeds 41–45)** for the
+experiments on payout-source, F1 and prior calibration. Using separate
+whole-cent and scaled payout probabilities reached 0.5041 F1 and 92.80 MAE on
+25% holdouts, and 0.5069 F1 and 93.56 MAE on 20% holdouts. The paired uncertainty
+intervals include zero for the full model's incremental changes at both sizes.
+Reproduce the comparisons with `python -m analysis.confirm_marked_payouts` and
+`--percent 20` or `--percent 25` after the corresponding template verification.
+Independent motor risk scores from [Belgium](https://dutangc.github.io/CASdatasets/reference/beMTPL97.html)
+and [Spain](https://data.mendeley.com/datasets/sw4jmdb2sm/1) rank profiles without
+positive history. For those screens, use `pyreadr` in the optional analysis runtime
+and place the source files named by the scripts in `analysis/output/`.
+Each dashboard run lists its reproduction command.
+
+**Profile presence and fixed-flag pricing (seeds 41–45)** compares a detector
+that predicts whether any held-out row in a profile claims, then estimates how
+many claim. Blending it with the payout-source ensemble reached 0.5075 F1 and
+93.53 MAE on 20% holdouts, and 0.5062 F1 and 92.79 MAE on 25% holdouts.
+The incremental F1 intervals include zero at both sizes.
+
+**Profile ranking and payout composition (seeds 41–45)** compares pairwise
+reranking, payout-component likelihoods and learned pricing. Pairwise reranking
+reached 0.5086 F1 and 93.50 MAE on 20% holdouts. The payout-component classifier
+reached 0.5067 F1 and 92.78 MAE on 25% holdouts. These are experimental results.
+
+**Generalization to unseen profiles (seeds 41–45)** holds out all rows of
+each selected profile. The payout-source ensemble reached 0.1415 F1 in this
+stress test. CatBoost with unlabeled batch profile counts reached 0.1491 F1.
+Reproduce it with `python -m analysis.evaluate_disjoint_claim_profiles`.
+
+**Profile coverage and payout floors (seeds 41–45)** adds mixed-profile
+holdouts and a source-tail pricing comparison. The best standard-holdout
+rankings kept their F1 of 0.5086 at 20% and 0.5067 at 25% while MAE fell to
+93.42 and 92.69. The mixed-profile holdouts averaged about 53% unfamiliar
+rows and 0.395 F1.
+
+**Claim-count decisions and cold-profile fallback (seeds 41–45)** compares
+full claim-count distributions, boosted ranking and detector pools. The
+count detector reached 0.5087 F1 and 93.47 MAE on 20% holdouts, with weaker
+results on 25% holdouts. The opt-in fallback reached 0.1491 F1 and 114.51 MAE
+when holding out entire profiles. Even perfect resolution of model disagreements
+would reach only 0.5232 F1 on the 20% cohort.
+
+**Cold risk and supported payouts (seeds 41–45)** compares new detectors for
+profiles without positive claim history and tests payout cap exceptions. Adding
+cold-profile flags lowered F1. Allowing a higher quote with exactly one matching
+fitting payout kept F1 at 0.5086 and 0.5067 and reduced MAE to 93.07 and 92.15 on
+20% and 25% holdouts, respectively. On 30% holdouts, the frozen pairwise
+reranker reached 0.4915 F1, and the cap exception reduced MAE from 95.86 to
+94.46. The pricing intervals include zero and the rule remains experimental.
+Reproduce the 30% comparison with `python -m analysis.confirm_supported_payout_tail`.
+
+**Contextual claim templates (seeds 41–45)** compares rating-dependent template
+priors on matched and profile-disjoint holdouts. The contextual F1 gains varied
+by cohort. With CatBoost's flags fixed, the pooled lower-tail quote reduced MAE
+from 114.51 to 112.96 at 25% and from 120.90 to 119.28 at 35% of profiles held
+out. Reproduce it with `python -m analysis.evaluate_disjoint_contextual_templates --percent 35`.
+
+**Claim evidence replays (seeds 41–45)** compares near-exposure linkage,
+marked Bayesian classifiers, simulated payout histories, and group cutoffs.
+Even an oracle choosing a cutoff per payout-history group averaged 0.5113 F1.
+The cents-based payout correction reached 0.5055 F1 and 92.65 MAE on the
+25% payout-source comparison. With the observed payout cap exception, the
+20% pairwise reranker reached 0.5093 F1 and 93.05 MAE. The paired F1 gain
+interval includes zero and the correction lost F1 with the 25% leader. Reproduce the
+combined comparison with `python -m analysis.replay_residue_and_cap --percent 20`.
+
+**Profile calibration stability (seeds 41–45)** resamples fitting profiles
+for calibration and payout-head refits. Calibration voting reached 0.5095 F1
+and 93.04 MAE on the 20% holdouts. Its incremental F1 interval includes zero,
+and the 25% comparison favors the earlier detector for F1. Reproduce it with
+`python -m analysis.evaluate_profile_calibration_uncertainty --percent 20`.
+
+**Claim history calibration (seeds 41–45)** tests single-observation
+sensitivity, scoring-history reweighting, and kernel classifiers. Reweighting
+reached 0.5096 F1 and 93.05 MAE on 20% holdouts. Its paired gain interval
+includes zero and the same correction lost F1 at 25%. Reproduce it with
+`python -m analysis.evaluate_history_importance_calibration --percent 20`.
+
+**Payout outcome evidence (seeds 41–45)** compares distribution-based claim
+ranking and payout-size classes. On 20% holdouts, the distribution correction
+reached 0.5101 F1 and 93.02 MAE. The fixed-volume variant reached 0.5102 F1
+and 93.05 MAE. F1 fell on 25% and 30% holdouts. Reproduce the comparison
+with `python -m analysis.evaluate_payout_distribution_evidence --percent 20`.
+
+**Masked profile-set networks (seeds 41–45)** learn claim counts from
+partially hidden fitting histories. The networks fell short on standard
+holdouts. Neural flags confirmed by the cold-start detectors reduced
+profile-disjoint MAE to 112.41 at 25% and 118.66 at 35%. Reproduce the
+agreement with `python -m analysis.replay_cold_payout_agreement --profile-set --percent 25`.
+
+**Payout routing and profile activity (seeds 41–45)** compares expert
+disagreement rules and latent claim activity. The hurdle blend reached
+0.1522 F1 on 25% profile-disjoint holdouts with higher MAE. Even resolving
+all 17 detectors’ disagreements perfectly would average 0.5365 F1 at 20%.
+Reproduce the diagnostic with `python -m analysis.audit_payout_routing_headroom`.
+
+**Finite payout inventory (seeds 41–45)** conditions on the number of feature
+rows for each profile. Its best matched 25% result was 0.5043 F1 and 92.72 MAE.
+On unfamiliar profiles, adding inventory to the detector vote raised F1 at 25%
+and lowered it at 35%. Reproduce those comparisons with
+`python -m analysis.evaluate_finite_roster_claims` and
+`python -m analysis.replay_cold_inventory_votes --percent 35`.
+
+**Marked payout components (seeds 41–45)** tests payout-size likelihoods and
+structural quotes on profiles with an unmatched payout residual. F1 reranking
+fell short. Repricing improved MAE on 25% holdouts and lost at 20%. An audit
+using held-out labels put the pruning-only ceiling at 0.5573 F1 on 20% holdouts.
+Reproduce the audit with `python -m analysis.audit_marked_component_headroom`.
+The fitted veto did not approach that ceiling. Reproduce it with
+`python -m analysis.evaluate_component_claim_veto --percent 20`.
+
+**Profile neighborhood transfer (seeds 41–45)** tests residuals and
+multiplicity from related profiles. The matched 25% comparison gave no F1
+gain. Adding neighborhood support to the neural fallback reduced MAE to
+112.39 and 118.64 on 25% and 35% profile-disjoint holdouts, with nearly
+identical F1. Reproduce it with
+`python -m analysis.replay_residual_neighbor_agreement --percent 25`.
+
+**Joint payout capture (seeds 41–45)** fits payout-copy templates using fitting
+histories and unlabeled scoring counts. Neither direct use nor out-of-fold
+calibration beat the 20% and 25% leaders. On 20% holdouts, perfect pruning by
+payout structure reached 0.5203 F1. Adding finer groups with at least ten
+distinct fitting profiles yielded a ceiling of 0.5151 for those groups.
+Reproduce the diagnostic with `python -m analysis.audit_joint_capture_headroom`.
+
+**Marked exposure hazard (seeds 41–45)** models separate whole-cent and scaled
+payout rates. The opt-in fallback reached 111.69 MAE at 25% and 117.96 MAE at
+35% on profile-disjoint holdouts, with F1 of 0.1494 and 0.1544. The matched
+20% reranker reached 0.5103 F1, with weaker results at 25%. Replay the saved
+configuration with `python -m analysis.confirm_cold_exposure_hazard --percent 25`.
+
+**Mixed portfolio routing and F1 (seeds 41–45)** tests separate risk models by
+profile familiarity and reranking across payout-history mixes. Neither F1 gain
+repeated on the heavier 35% mixed holdout. On the 25% mixed holdouts, fitted
+payout tails and the cap exception reduced MAE from 96.14 to 95.38 with the
+same claim flags. Reproduce the pricing sensitivity with
+`python -m analysis.audit_mixed_payout_changes`.
+
+**Ordinal payout distribution (seeds 41–45)** learns the probability of
+exceeding several payout thresholds in one model. Direct ordinal prediction
+lowered matched F1. An audit using evaluation outcomes put the 20% ceiling
+from resolving detector disagreements at 0.5521 F1. The cross-fitted gate
+showed no repeatable F1 gain. Reproduce the diagnostic with
+`python -m analysis.audit_ordinal_disagreements`.
+The conservative family vote removed five false flags across the ten matched
+holdouts. Replay it with `python -m analysis.replay_ordinal_resolution --percent 20`.
+
+**Masked payout and roster context (seeds 41–45)** compares neighbors drawn
+from masked payout histories and models that use unlabeled portfolio context.
+The neighbor corrections did not consistently improve F1 across holdout sizes,
+and the nonlinear payout composition model also trailed the existing vote.
+Reproduce with `python -m analysis.evaluate_masked_payout_neighbors --percent 20`
+or `python -m analysis.evaluate_roster_context_risk --percent 20`.
+Trimming quotes where the risk models agreed lowered MAE by 0.013 at 20% and
+0.010 at 25% with identical flags. Replay with
+`python -m analysis.replay_uncertain_claim_pricing --percent 20`.
+
+**Verified freMPL pre-claim covariates (seeds 41–45)** matches all 30,595
+training profiles to the [CASdatasets freMPL feature dictionary](https://dutangc.github.io/CASdatasets/reference/freMPL.html)
+and recovers prior claim counts for 7,856 profiles. The experiments use public
+coverage, deductible, and prior-history fields. They require access to equivalent
+metadata for a new portfolio. To prepare the historical data, install `pyreadr`,
+place `freMPL1.rda` through `freMPL10.rda` from
+[CASdatasets](https://github.com/dutangc/CASdatasets/tree/master/data) in one
+directory, and run `python -m analysis.prepare_frempl_covariates --source-dir <directory>`.
+The calendar studies also use published policy start dates to test term timing.
+Run `python -m analysis.evaluate_disjoint_policy_calendar --percent 25` for a
+holdout that keeps compatible consecutive terms together. On 35% of linked
+components, adding pre-claim history and dates raised mean F1 from 0.1558 to
+0.1621 and reduced MAE from 115.66 to 115.08.
+
+**Payout composition evidence (seeds 41–45)** compares a binary detector with
+models that predict the kind of payment missing from a partial history.
+Reproduce with `python -m analysis.evaluate_masked_payout_composition --percent 20`.
+
+**Profile count distributions (seeds 41–45)** learns the number of claims left
+in a profile using simulated scoring subsets. Agreement between two count
+models improved mean F1 to 0.5137 at 20%, with no F1 gain at 25%.
+Reproduce with `python -m analysis.evaluate_profile_count_hurdle --percent 20`.
+
+**Claim history retrieval (seeds 41–45)** learns similar payout histories with
+trees trained on separate fitting profiles. Admissions confirmed by both
+retrieval models reached 0.5144 F1 on 20% holdouts. Reproduce with
+`python -m analysis.evaluate_ranked_history_leaf_retrieval --percent 20`.
+The same dashboard section includes the cross-fitted combination of count,
+payout-type, and analogue scores. Its best F1 was 0.5112 at 20% and 0.5057 at
+25%. Reproduce with `python -m analysis.evaluate_cross_family_claims --percent 20`.
+The section also includes separate models for reviewing missed claims and false
+alarms. Reproduce with `python -m analysis.evaluate_directional_claim_review --percent 20`.
+The companion-roster experiment uses only the 18 input fields from `data/testset.csv`
+to refine profile sizes. Reproduce with `python -m analysis.evaluate_companion_claim_roster --percent 20`.
+The rating-mixture transfer study holds out entire profiles. Reproduce with
+`python -m analysis.confirm_disjoint_cold_mixture`.
+The rebuilt pairwise and ordinal vote experiment fits from the training rows.
+Run `python -m analysis.evaluate_live_claim_vote --percent 20` for the matched
+holdout or `python -m analysis.confirm_live_claim_vote_transfer` for mixed profiles.
+The pairwise cutoff audit uses held-out outcomes to measure the ceiling of
+threshold changes. Run `python -m analysis.audit_pairwise_volume_headroom`.
+
 Select **Extended claim history (seeds 41-45)** to see the two LightGBM results,
 their per-seed metrics, and downloadable training configurations.
 Select **Extended claim history tuning (500 runs)** for 500 operating points
 scored on the same 25% holdouts with seeds 41–45. The source JSON includes a
 comparison of the selected leaders and earlier baselines on seeds 301–305.
-The dashboard opens on **All sources**, sorted by mean MAE. Select **Claim F1
+The dashboard opens on **All sources**, sorted by mean MAE, with **5 or more** seeds.
+Selecting an individual split seed sets the minimum to one. Use **Minimum F1**
+to filter mean claim F1 on a 0–1 scale. The other metric filters set a maximum
+mean MAE and minimum precision and recall. Filters update automatically, and
+**Apply filters** refreshes the results using the current values. The table shows
+**Applying filters…** until the updated results are ready. When Minimum F1 is set,
+the filter panel shows the applied cutoff and match count. Select **Claim F1
 tuning (500 runs)** to see results from seeds 41–45 sorted by mean claim F1.
 Rebuild the F1 study with `python -m analysis.tune_claim_f1`.
 Matching operating points average unique seeds. Grouped results select the
@@ -197,12 +623,13 @@ Mean F1 averages each seed's claim-detection F1 (0–1; higher is better),
 with zero when precision and recall are both zero. It is sortable and included in the run's observations download.
 Star rows to favourite their exact configuration and seed cohort; **Favourites only**
 shows saved rows alongside the other filters. Bookmarks persist in browser local
-storage for the same page/browser; if storage is blocked, they last for the session.
+storage for the same address and browser. Bookmarks from the old local file stay
+with that file's address. If storage is blocked, bookmarks last for the session.
 Clearing filters keeps bookmarks. Multiple operating points can be bookmarked per model.
 
-The dashboard is a saved standalone page. Its historical results and optional
-analysis caches are separate from the checkpoint 2 generator. Regenerate the
-extended-history tuning scores with `python -m analysis.tune_claim_history --output analysis/output/claim_history_tuning.json --dashboard dashboard/index.html`
+The dashboard data and optional analysis caches are separate from the checkpoint 2 generator.
+Regenerate the extended-history tuning scores with
+`python -m analysis.tune_claim_history --output analysis/output/claim_history_tuning.json --dashboard dashboard/index.html`
 after installing `src/requirements.txt` and `src/optional_requirements.txt`.
 
 ### Basic linear regression

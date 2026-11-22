@@ -16,3 +16,7 @@
 - Keep files short, ideally under 300 lines, with clear a clear purpose and description at the top
 - Keep methods short and single focus, ideally under 30 lines but exceptions are allowed
 - Use descriptive variable and file names like `FloorPlan` rather than abbreviations like `FlrPln`
+
+# Analysis guidelines
+
+- Always run configurations on seeds 41, 42, 43, 44, 45
