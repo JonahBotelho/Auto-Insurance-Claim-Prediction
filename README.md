@@ -273,6 +273,24 @@ Install the analysis dependencies separately:
 python -m pip install -r analysis/requirements.txt
 ```
 
+### Final candidate search
+
+Fit the count-retrieval timeline model once per holdout and cache its per-row
+outputs, then score pricing and flag-volume variants by mean F1, then mean MAE:
+
+```powershell
+python -m analysis.cache_final_model_outputs --cohort matched_20 --seeds 41 42 43 44 45
+python -m analysis.evaluate_final_candidates --cohort matched_20
+```
+
+Writing $1 instead of the quoted price for flagged rows with risk below 0.45 kept F1
+and lowered mean MAE by 0.28 to 0.49 on 20% and 25% holdouts and fresh seeds 46–50.
+
+After caching `matched_20` and `matched_25`, run `python -m analysis.publish_final_candidates`
+and select **Near-zero pricing for low-confidence flags (seeds 41–45)** in the dashboard.
+It shows the rule and a rerun control for each holdout size. The rule is not yet
+applied by `src.predict`.
+
 ### Known-profile reranking archive
 
 Select **Known-profile reranking** in the dashboard to review the matched

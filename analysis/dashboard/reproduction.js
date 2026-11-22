@@ -62,8 +62,8 @@ function reproductionPlan(row) {
   if (row.reproduction === "profile_structure") {
     const command = row.opt_in_config ? "python -m src.train --config " + row.opt_in_config : row.reproduction_command;
     return {mode:"analysis",badge:"Profile structure study",prompts:[],command,
-      note:row.opt_in_config ? "Train the opt-in configuration from the repository root."
-        : "Generate the median-pricing study outputs and run the corresponding profile experiments.",
+      note:row.reproduction_note || (row.opt_in_config ? "Train the opt-in configuration from the repository root."
+        : "Generate the median-pricing study outputs and run the corresponding profile experiments."),
       footnote:"The dashboard aggregates five matching holdouts. Reserved-split checks are in the source download."};
   }
   if (row.reproduction === "payout_signatures") {
