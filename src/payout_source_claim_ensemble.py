@@ -15,7 +15,8 @@ from src.template_claim_ensemble import TemplateClaimEnsemble
 class PayoutSourceClaimEnsemble(TemplateClaimEnsemble):
     def _fit_components(self, features, amounts, *, price):
         base = super()._fit_components(features, amounts, price=price)
-        return (*base, PayoutSourceEvidence().fit(features, amounts))
+        source = PayoutSourceEvidence(structural=getattr(self, "structural_source_features", False))
+        return (*base, source.fit(features, amounts))
 
     def _scores(self, components, features):
         scores, prices = super()._scores(components[:-1], features)

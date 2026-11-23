@@ -14,34 +14,50 @@ competition setup, and directions for future experiments.
 
 ## Final competition prediction
 
-From the repository root, install the dependencies and train the selected final
-competition model (dashboard run **1180002**):
+The selected submission candidate is dashboard run **1190003**. Its
+Bonus-Malus timeline uses exact successor links, competing discounts, and
+conditional payout quotes for cold profiles. It averaged **0.52348 F1 /
+92.52804 MAE** on 20% matched holdouts across seeds 41–45.
+
+Install dependencies and train from the repository root.
 
 ```powershell
 python -m pip install -r src/optional_requirements.txt
-python -m src.train --config configs/claim_history/em_reconciled_bm_v3_l1_ensemble.json
+python -m src.train --config configs/claim_history/em_timeline_discount_quantile_ensemble.json --full-fit-only --model-path models/submission_1190003.joblib
 ```
 
-Press Enter to confirm training. The config uses seed 42, trains on all 70,000 rows
-of `data/trainingset.csv`, and saves `models/two_stage_claim_model.joblib`. If you
-already have the saved model, install the dependencies and skip training. Use
-`--model-path` to point to a model saved elsewhere.
-
-When the competition CSV arrives, replace the example paths and run:
+Press Enter at the confirmation prompt. Training uses seed 42 and all
+70,000 rows from `data/trainingset.csv`. Use the saved model to score the
+test CSV. For a new competition CSV, replace the `--input` path.
 
 ```powershell
-python -m src.predict --input "C:\path\competition.csv" --output "C:\path\submission.csv"
+python -m src.predict --model-path models/submission_1190003.joblib --input data/testset.csv --output submission_1190003.csv
 ```
 
-The input needs `rowIndex` and the same 18 feature columns as `data/testset.csv`;
-the saved model contains the fitted history and needs only the new CSV at
-prediction time. The submission contains `rowIndex` and `ClaimAmount` in the input
-row order.
+The input needs `rowIndex` and the same 18 feature columns as `data/testset.csv`.
+The output contains `rowIndex` and `ClaimAmount` in input row order.
 
-Across seeds 41–45, `em_reconciled_bm_v3_l1_ensemble.json` adds exact EM reconciled
-veto, Bonus-Malus timeline v3 with joint expected-F1 cutoff, and calibrated \$1 < 48%
-L1 pricing, reaching **0.52301 F1 / 92.58461 MAE** on 20% matched holdouts (and
-**0.51424 F1 / 91.64024 MAE** on 25% matched holdouts in dashboard run **1180004**).
+Reproduce the five-seed matched holdout scores.
+
+```powershell
+python -m src.reproduce_timeline_models --config configs/claim_history/em_timeline_discount_quantile_ensemble.json --cohorts matched_20 matched_25
+```
+
+See [submission details](submission.md#final-competition-submission) for the
+25% benchmark and the [benchmark report](results/em_timeline_benchmark.md)
+for transfer results.
+
+The earlier `configs/claim_history/em_timeline_adaptive_ensemble.json` adapts
+ranking to batch retention and caps quotes at observed payout support. On native
+25% matched holdouts (seeds 41–45), F1 rose from **0.51401 to 0.51550** and
+MAE moved from **91.62561 to 91.62271**. Fresh seeds 46–50 also improved
+from **0.50396 to 0.50551 F1** at 25%. Use a separate model path to train and
+predict with this configuration.
+
+See the [four claim model screens](results/claim_avenue_screens.md) for the
+cached vote-pattern, pricing, and cold timeline comparisons.
+The [follow-up screens](results/claim_avenue_followup_screens.md) cover
+warm counts, quote adjustments, payout multiplicity, and one-to-one links.
 
 Earlier deployable alternatives (same `src.train --config` and `src.predict` workflow):
 
@@ -54,7 +70,7 @@ Earlier deployable alternatives (same `src.train --config` and `src.predict` wor
   **95.33733 MAE** on 25% mixed) and `configs/claim_history/payout_source_local_tail_ensemble.json`
   (requires only `src/requirements.txt`).
 
-## Reproduce the best F1 benchmark
+## Reproduce the historical F1 benchmark
 
 From the repository root, run `python -m pip install -r src/requirements.txt`
 and `python -m src.reproduce_claim_benchmark`. The five-seed mean on 20% holdouts is
@@ -601,11 +617,10 @@ the lowest saved MAE across the included seeds, matched all-zero mean MAE,
 percentage improvement, precision, recall, mean F1 and aggregate points.
 The pagination controls below the table show the total number of matching results.
 Hover over a run label or select **View** to see its full name.
-Aggregate points compare mean holdout MAE and mean F1 against the 50 checkpoint 1
-test-set submissions. Exact matches earn their published points, including tied
-ranks. For values between checkpoint entries, the dashboard uses the full-precision
-metric to linearly interpolate between their points. Each metric earns 1–50
-points, rounded to two decimal places before the two scores are added.
+Aggregate points score mean holdout MAE and mean F1 linearly on 0–50 scales
+each: MAE earns 0 points at 120 or above up to 50 points at 70 or below, and F1
+earns 0 points at 0 up to 50 points at 0.80 or above. Each metric is rounded to
+two decimal places before the two scores are added (0–100 total).
 Mean F1 averages each seed's claim-detection F1 (0–1; higher is better),
 with zero when precision and recall are both zero. It is sortable and included in the run's observations download.
 Star rows to favourite their exact configuration and seed cohort; **Favourites only**

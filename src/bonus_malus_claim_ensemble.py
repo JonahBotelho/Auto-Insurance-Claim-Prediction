@@ -14,6 +14,7 @@ from src.clean_warm_calibrator import CleanWarmCalibrator
 from src.dashboard_model import profile_keys
 from src.exact_em_deconvolution import EMReconciledVeto
 from src.feature_schema import RANDOM_SEED
+from src.local_tail_refinement import cap_to_observed_payout_support
 from src.pairwise_payout_ensemble import PairwisePayoutEnsemble
 from src.profile_count_hurdle import ProfileCountHurdle
 from src.profile_count_survival import COUNT, ProfileCountSurvival
@@ -104,7 +105,10 @@ class EMTimelineClaimEnsemble(CountRetrievalTimelineClaimEnsemble):
 
     def __init__(self, baseline_model, claim_probability_threshold=0.25, n_splits=5, random_seed=RANDOM_SEED,
                  calibrated_l1_pricing=True, low_confidence_cutoff=0.48, low_confidence_floor=1.0,
-                 em_support_min=0.003, clean_weight=0.50, default_alpha=0.80):
+                 em_support_min=0.003, clean_weight=0.50, default_alpha=0.80, masked_quote_pricing=False,
+                 structural_source_features=False, cap_to_payout_support=False, retention_adjusted_ranking=False,
+                 history_crossfit_repeats=1, seen_profile_retention=False, competing_discounts=False,
+                 conditional_cold_pricing=False):
         super().__init__(baseline_model, claim_probability_threshold=claim_probability_threshold,
                          n_splits=n_splits, random_seed=random_seed)
         self.calibrated_l1_pricing = calibrated_l1_pricing
@@ -113,6 +117,14 @@ class EMTimelineClaimEnsemble(CountRetrievalTimelineClaimEnsemble):
         self.em_support_min = em_support_min
         self.clean_weight = clean_weight
         self.default_alpha = default_alpha
+        self.masked_quote_pricing = masked_quote_pricing
+        self.structural_source_features = structural_source_features
+        self.cap_to_payout_support = cap_to_payout_support
+        self.retention_adjusted_ranking = retention_adjusted_ranking
+        self.history_crossfit_repeats = history_crossfit_repeats
+        self.seen_profile_retention = seen_profile_retention
+        self.competing_discounts = competing_discounts
+        self.conditional_cold_pricing = conditional_cold_pricing
 
     def fit(self, features, amounts):
         with threadpool_limits(limits=2):
@@ -120,6 +132,8 @@ class EMTimelineClaimEnsemble(CountRetrievalTimelineClaimEnsemble):
             self.timeline_ = BonusMalusTimelineV3Detector(
                 random_seed=self.random_seed, alpha=self.default_alpha,
                 low_confidence_floor=self.low_confidence_floor,
+                competing_discounts=getattr(self, "competing_discounts", False),
+                conditional_cold_pricing=getattr(self, "conditional_cold_pricing", False),
             ).fit(features, amounts)
             self.count_survival_ = ProfileCountSurvival().fit(features, amounts)
             self.count_hurdle_ = ProfileCountHurdle().fit(features, amounts)
@@ -127,17 +141,20 @@ class EMTimelineClaimEnsemble(CountRetrievalTimelineClaimEnsemble):
             self.leaf_regular_ = ClaimHistoryLeafRetrieval().fit(features, amounts)
             self.em_veto_ = EMReconciledVeto(default_alpha=self.default_alpha).fit(features, amounts)
             self.warm_calibrator_ = (
-                CleanWarmCalibrator(alpha=self.default_alpha, random_seed=self.random_seed).fit(features, amounts)
+                CleanWarmCalibrator(alpha=self.default_alpha, random_seed=self.random_seed,
+                                    fit_quote_pricing=self.masked_quote_pricing).fit(features, amounts)
                 if self.calibrated_l1_pricing else None
             )
         return self
 
     def _score_batch(self, features):
-        anchor, prices, flags, base_cutoff = PairwisePayoutEnsemble._score_batch(self, features)
+        anchor, prices, flags, base_cutoff, pricing_risk = self._ranked_batch(features)
         if not len(features):
             return anchor, prices, flags, base_cutoff
         prices, flags = self._refine_warm_flags(features, anchor, prices, flags, base_cutoff)
-        warm, is_reconciled, p_em, em_mass = self.em_veto_.predict(features)
+        warm, is_reconciled, p_em, em_mass = self.em_veto_.predict(
+            features, use_seen_retention=getattr(self, "seen_profile_retention", False),
+        )
         cand_cold, cold_risk = self.timeline_.predict_cold_risk(features)
 
         if warm.any() and len(features) * self.prevalence_ >= 10:
@@ -155,10 +172,12 @@ class EMTimelineClaimEnsemble(CountRetrievalTimelineClaimEnsemble):
         flags = flags | added_cold
 
         if self.calibrated_l1_pricing and self.warm_calibrator_ is not None:
-            p_clean = self.warm_calibrator_.predict(features)
+            p_clean, prices = self.warm_calibrator_.predict_with_quotes(features, prices, self.low_confidence_floor)
             cold_prob = np.where(cand_cold, np.maximum(anchor, cold_risk), anchor)
-            p_l1 = np.where(warm, (1.0 - self.clean_weight) * anchor + self.clean_weight * p_clean, cold_prob)
+            p_l1 = np.where(warm, (1.0 - self.clean_weight) * pricing_risk + self.clean_weight * p_clean, cold_prob)
             prices = np.where(p_l1 < self.low_confidence_cutoff, self.low_confidence_floor, prices)
+        if getattr(self, "cap_to_payout_support", False):
+            prices = cap_to_observed_payout_support(features, prices, flags, self.em_veto_.paid_, self.low_confidence_floor)
 
         risk = np.where(cand_cold, np.maximum(anchor, cold_risk), anchor)
         return _align_risk_with_flags(risk, flags, cutoff), prices, flags, cutoff

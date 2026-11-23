@@ -1,5 +1,8 @@
 # Training configuration
 
+The final submission candidate is dashboard run **1190003**. See [final
+competition submission](#final-competition-submission) for training and prediction.
+
 ## Run instructions
 
 From the repository root, install the dependencies for submissions 1-6 and run:
@@ -269,42 +272,39 @@ and recorded 0.160 configuration for `2_2_10`.
 
 ## Final competition submission
 
-The selected final competition model is dashboard run **1180002**
-(`configs/claim_history/em_reconciled_bm_v3_l1_ensemble.json`), published in the
-**EM reconciled veto + BM timeline v3 & calibrated L1 pricing (seeds 41–45)**
-dashboard source. It runs natively from `src/` with no `analysis/` dependencies.
+The selected submission candidate is dashboard run **1190003**. Its
+Bonus-Malus timeline uses exact successor links, competing discounts, and
+conditional payout quotes for cold profiles. The dashboard lists the run under
+**Native Bonus-Malus successor and pricing follow-up**.
 
-From the repository root, install dependencies, train on all 70,000 rows of
-`data/trainingset.csv`, and predict on any new competition CSV:
+Install dependencies and train from the repository root.
 
 ```powershell
 python -m pip install -r src/optional_requirements.txt
-python -m src.train --config configs/claim_history/em_reconciled_bm_v3_l1_ensemble.json
-python -m src.predict --input "C:\path\to\new_testset.csv" --output "C:\path\to\submission.csv"
+python -m src.train --config configs/claim_history/em_timeline_discount_quantile_ensemble.json --full-fit-only --model-path models/submission_1190003.joblib
 ```
 
-Press Enter at the confirmation prompt to start training. Training saves
-`models/two_stage_claim_model.joblib` using seed 42; use `--model-path` with
-`src.predict` if the saved model is stored elsewhere. The input CSV needs
-`rowIndex` and the same 18 feature columns as `data/testset.csv`; claim labels
-are unnecessary. The output contains `rowIndex,ClaimAmount` in input row order.
+Press Enter at the confirmation prompt. Training uses seed 42 and all
+70,000 rows from `data/trainingset.csv`. Use the saved model to score the
+test CSV. For a new competition CSV, replace the `--input` path.
 
-Validation metrics below are five-seed matched-holdout records (`41–45`), not
-competition-set scores.
+```powershell
+python -m src.predict --model-path models/submission_1190003.joblib --input data/testset.csv --output submission_1190003.csv
+```
 
-| Dashboard ID | Eval % | Seeds | Mean MAE | Lowest seed MAE | All-zero mean MAE | Improvement | Precision | Recall | Mean F1 |
-|---|---:|---|---:|---:|---:|---:|---:|---:|---:|
-| **1180002** *(selected)* | 20% | 41–45 | **92.5855** | **81.3055** | 102.5418 | **9.58%** | **51.47%** | **53.16%** | **0.52301** |
-| **1180004** | 25% | 41–45 | **91.6402** | **85.4606** | 101.5314 | **9.67%** | **50.89%** | **51.99%** | **0.51424** |
+The input needs `rowIndex` and the same 18 feature columns as `data/testset.csv`.
+The output contains `rowIndex` and `ClaimAmount` in input row order.
 
-### 1180002 — 20% matched holdout (selected final model)
+| Dashboard run | Matched holdout | Split seeds | Mean F1 | Mean MAE |
+| --- | ---: | --- | ---: | ---: |
+| **1190003** (selected) | 20% | 41–45 | **0.52348** | **92.52804** |
+| 1190004 | 25% | 41–45 | 0.51593 | 91.57719 |
 
-- Model: `EMTimelineClaimEnsemble` — Count-retrieval + EM reconciled veto + Bonus-Malus timeline v3 (joint expected-F1 cutoff) + calibrated \$1 < 48% L1 pricing.
-- Deployable configuration: `configs/claim_history/em_reconciled_bm_v3_l1_ensemble.json` (native `src/` 5-seed reproduction: **0.523010 F1**, **92.58461 MAE**).
-- Training data: all 70,000 rows (3,335 positive claims) from `data/trainingset.csv`; seed 42; uses only the 18 input features (`rowIndex` excluded from model inputs).
-- Dashboard status: Highest 5-seed F1 and lowest MAE on matched holdouts (supersedes runs `1170002` and `1160003`).
+Reproduce the five-seed matched holdout scores.
 
-### 1180004 — 25% matched holdout (companion validation check)
+```powershell
+python -m src.reproduce_timeline_models --config configs/claim_history/em_timeline_discount_quantile_ensemble.json --cohorts matched_20 matched_25
+```
 
-- Model: Same `EMTimelineClaimEnsemble` architecture evaluated on 25% matched holdouts (seeds 41–45).
-- Dashboard status: Highest 5-seed F1 and lowest MAE on 25% matched holdouts (supersedes runs `1170004` and `1160006`).
+See the [benchmark report](results/em_timeline_benchmark.md) for paired
+comparisons and transfer results.

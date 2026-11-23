@@ -34,6 +34,27 @@ HISTORY_COLUMNS = (
     "historical_claim_share",
 )
 
+PAYOUT_SHAPE_COLUMNS = (
+    "unique_scaled", "whole_only_repeats", "scaled_only_repeats",
+    "unmatched_whole", "smallest_component", "whole_cent_round_share",
+    "whole_component_spread", "scaled_is_pair", "whole_rows_even",
+)
+
+
+def payout_shape(paid):
+    whole = sorted(base for base, cent in paid if cent)
+    scaled = sorted(base for base, cent in paid if not cent)
+    total = max(scaled, default=0)
+    return (
+        len(scaled), sum(paid[base, True] > 1 for base in whole), sum(paid[base, False] > 1 for base in scaled),
+        sum(base > total for base in whole) if scaled else 0,
+        np.log1p(min((*whole, *scaled), default=0) / 100.),
+        sum(base % 100 == 0 for base in whole) / max(1, len(whole)),
+        np.log1p((whole[-1] - whole[0]) / 100.) if whole else 0.,
+        any(total - base in whole[index + 1:] for index, base in enumerate(whole)),
+        sum(paid[base, True] for base in whole) % 2 == 0,
+    )
+
 
 def aggregate_history(features, amounts):
     keys = profile_keys(features)
@@ -63,9 +84,9 @@ def masked_states(zero, paid, retention):
         yield kept[0], observed, probability * negatives_left, probability * positives_left
 
 
-def history_design(features, histories):
+def history_design(features, histories, columns=HISTORY_COLUMNS):
     covariates = actuarial_features(features, np.zeros(len(features))).drop(columns="zero_history")
-    return pd.concat([covariates.reset_index(drop=True), pd.DataFrame(histories, columns=HISTORY_COLUMNS)], axis=1)
+    return pd.concat([covariates.reset_index(drop=True), pd.DataFrame(histories, columns=columns)], axis=1)
 
 
 def roster_keys(fitting, query):

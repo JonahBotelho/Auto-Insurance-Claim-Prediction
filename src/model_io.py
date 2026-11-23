@@ -13,7 +13,7 @@ DEFAULT_MODEL_PATH = Path(__file__).resolve().parents[1] / "models" / "two_stage
 
 def save_model(model, path: Path = DEFAULT_MODEL_PATH) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
-    joblib.dump(model, path)
+    joblib.dump(model, path, compress=3)
     return path
 
 

@@ -4,10 +4,11 @@ import numpy as np
 
 from src.feature_schema import RANDOM_SEED
 from src.payout_pricing import whole_cent
+from src.payout_source_evidence import STRUCTURAL_COLUMNS
 
 
 def payout_source_design(rows):
-    return rows[[
+    original = rows[[
         "whole_only", "scaled_only", "mixed_incomplete", "sum_attested", "copies_complete", "possible_copies_left",
         "whole_count", "scaled_count", "whole_families", "price_log", "price_small", "price_large", "whole_dollars",
         "other_whole", "other_scaled", "other_confirmed_sums", "other_split_sums", "log_source_ratio",
@@ -18,6 +19,9 @@ def payout_source_design(rows):
         scaled_common_payment=rows.scaled_only * rows.other_confirmed_sums,
         partial_gap_belief=rows.mixed_incomplete * rows.gap_other_whole,
     ).to_numpy(dtype=float)
+    if STRUCTURAL_COLUMNS[0] in rows:
+        return np.column_stack([original, rows[list(STRUCTURAL_COLUMNS)].to_numpy()])
+    return original
 
 
 class PayoutSourceCalibration:

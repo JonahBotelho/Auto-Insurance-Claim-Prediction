@@ -6,7 +6,9 @@ import numpy as np
 import pandas as pd
 
 from src.dashboard_model import profile_keys
+from src.exact_em_deconvolution import EMReconciledVeto
 from src.payout_pricing import payout_signature
+from src.warm_source_context import CONTEXT_COLUMNS, WarmSourceContext
 
 COLUMNS = (
     "whole_only", "scaled_only", "mixed_incomplete", "sum_attested", "copies_complete", "possible_copies_left",
@@ -14,12 +16,17 @@ COLUMNS = (
     "other_whole", "other_scaled", "other_confirmed_sums", "other_split_sums", "log_source_ratio",
     "gap_fraction", "gap_other_whole", "copy_upper_rate",
 )
+STRUCTURAL_COLUMNS = (*CONTEXT_COLUMNS, "source_em_probability", "source_em_support")
 
 
 class PayoutSourceEvidence:
+    def __init__(self, structural=False):
+        self.structural = structural
+
     def fit(self, features, amounts):
         self.profiles_ = defaultdict(Counter)
-        for key, amount in zip(profile_keys(features), amounts):
+        keys = profile_keys(features)
+        for key, amount in zip(keys, amounts):
             if amount > 0:
                 self.profiles_[key][payout_signature(amount)] += 1
         self.whole_support_ = Counter()
@@ -33,6 +40,10 @@ class PayoutSourceEvidence:
             if cent and sum(cent) in scaled:
                 self.sum_support_[sum(cent)] += 1
                 self.split_support_[sum(cent)] += int(len(cent) > 1)
+        if self.structural:
+            ages = dict(zip(keys, features.feature3))
+            self.source_context_ = WarmSourceContext().fit(self.profiles_, ages)
+            self.em_ = EMReconciledVeto().fit(features, amounts)
         return self
 
     @staticmethod
@@ -73,7 +84,18 @@ class PayoutSourceEvidence:
         return pd.DataFrame.from_records([described[key] for key in keys], columns=COLUMNS, index=features.index)
 
     def score_inputs(self, features):
-        return self.transform(features).assign(
+        result = self.transform(features).assign(
             exposure=features.feature1,
             vehicle_age_code=features.feature3.astype(float),
         )
+        if not getattr(self, "structural", False):
+            return result
+        warm, _, probability, support = self.em_.predict(features)
+        context = np.zeros((len(features), len(CONTEXT_COLUMNS)))
+        for index, (key, age) in enumerate(zip(profile_keys(features), features.feature3)):
+            if warm[index]:
+                cent, scaled = self._by_source(self.profiles_[key])
+                context[index] = self.source_context_.describe(cent, scaled, age)
+        for column, values in zip(CONTEXT_COLUMNS, context.T):
+            result[column] = values
+        return result.assign(source_em_probability=probability, source_em_support=np.log1p(support * 1000))

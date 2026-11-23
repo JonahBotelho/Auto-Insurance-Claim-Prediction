@@ -35,6 +35,9 @@ def parse_args(argv=None) -> argparse.Namespace:
                         help="Evaluation/model seed (also the initial value in config mode).")
     parser.add_argument("--min-claim-f1", type=parse_claim_f1, default=DEFAULT_MIN_CLAIM_F1,
                         help="Minimum mean CV claim F1 when selecting a threshold (0 uses MAE alone).")
+    parser.add_argument("--model-path", type=Path, default=DEFAULT_MODEL_PATH, help="Output model path.")
+    parser.add_argument("--full-fit-only", action="store_true",
+                        help="Fit all training rows using a JSON config with one operating policy.")
     return parser.parse_args(argv)
 
 
@@ -118,7 +121,7 @@ def _prepare_training_data(settings):
     return X, y, partitions
 
 
-def _train_and_save(settings, X, y, partitions):
+def _train_and_save(settings, X, y, partitions, model_path=DEFAULT_MODEL_PATH):
     X_train, X_val, y_train, y_val = partitions
     best_threshold = _select_best_threshold(X_train, y_train, settings)
     model = _build_model(settings, best_threshold)
@@ -128,9 +131,12 @@ def _train_and_save(settings, X, y, partitions):
     print(f"Training MAE: {mean_absolute_error(y_train, training_predictions):.2f}")
     _print_holdout_results(model, X_val, y_val)
 
-    # Evaluation is complete; use all labeled rows for the saved model.
+    _save_full_fit(model, X, y, model_path)
+
+
+def _save_full_fit(model, X, y, model_path):
     model.fit(X, y)
-    saved_path = save_model(model)
+    saved_path = save_model(model, model_path)
     print(f"Saved trained model to {saved_path}")
 
 
@@ -143,9 +149,15 @@ def main(argv=None):
         elif args.config:
             from src.dashboard_config import load_dashboard_settings
             settings = replace(load_dashboard_settings(args.config), min_claim_f1=args.min_claim_f1)
-        X, y, partitions = _prepare_training_data(settings)
+        if args.full_fit_only:
+            if settings.reproduction is None or len(settings.threshold_candidates()) != 1:
+                raise ValueError("--full-fit-only requires a JSON config with one operating policy.")
+            data = load_training_data()
+            X, y, partitions = data[ALL_FEATURE_COLUMNS], data[TARGET_COLUMN], None
+        else:
+            X, y, partitions = _prepare_training_data(settings)
         if args.config:
-            confirm_training(settings, DEFAULT_MODEL_PATH)
+            confirm_training(settings, args.model_path, full_fit_only=args.full_fit_only)
     except (EOFError, KeyboardInterrupt):
         print("\nTraining cancelled before fitting.")
         return 130
@@ -154,8 +166,12 @@ def main(argv=None):
         return 2
 
     try:
-        _train_and_save(settings, X, y, partitions)
-    except (ValueError, ImportError) as error:
+        if args.full_fit_only:
+            model = _build_model(settings, settings.threshold_candidates()[0])
+            _save_full_fit(model, X, y, args.model_path)
+        else:
+            _train_and_save(settings, X, y, partitions, args.model_path)
+    except (ValueError, ImportError, OSError) as error:
         print(f"Training failed: {error}", file=sys.stderr)
         if isinstance(error, ImportError):
             print("Install optional model dependencies with: python -m pip install -r src/optional_requirements.txt", file=sys.stderr)

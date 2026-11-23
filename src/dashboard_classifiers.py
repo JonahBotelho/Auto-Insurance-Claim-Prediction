@@ -45,3 +45,12 @@ def prepare_dashboard_features(features, family):
     for column in CATEGORICAL_FEATURES:
         result[column] = result[column].astype(str) if family == "cat_native" else result[column].astype(float)
     return result
+
+
+def fit_history_blend(features, labels, settings, seed):
+    """Fit two small trees ensembles on the same fold-local history and sampled rows."""
+    numeric = prepare_dashboard_features(features, "lgbm")
+    common = {"rate": settings["rate"], "leaf": settings["leaf"], "l2": settings["l2"]}
+    lightgbm = dict(common, family="lgbm", iterations=settings["iterations"], depth=3)
+    catboost = dict(common, family="cat", iterations=200, depth=4)
+    return tuple(build_dashboard_classifier(head, seed).fit(numeric, labels) for head in (lightgbm, catboost))

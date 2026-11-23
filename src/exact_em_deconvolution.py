@@ -5,6 +5,7 @@ from itertools import product
 from math import comb
 
 import numpy as np
+from scipy.optimize import minimize_scalar
 
 from src.dashboard_model import profile_keys
 from src.masked_payout_history import aggregate_history
@@ -178,6 +179,25 @@ class ExactEMDeconvolution:
         return self.lookup_.get((obs_state, int(n_query)), (fallback, 0.0))
 
 
+def estimate_seen_retention(fitting_counts, query_counts, min_profiles=200):
+    """Estimate retention conditional on seeing at least one row of a profile in fitting."""
+    observed = Counter(
+        (kept, kept + query_counts.get(key, 0)) for key, kept in fitting_counts.items()
+        if kept + query_counts.get(key, 0) >= 2
+    )
+    if sum(observed.values()) < min_profiles:
+        return None
+    kept, full, weights = np.asarray([(k, n, weight) for (k, n), weight in observed.items()]).T
+
+    def loss(alpha):
+        log_visible = np.log1p(-(1. - alpha) ** full)
+        log_observed = kept * np.log(alpha) + (full - kept) * np.log1p(-alpha)
+        return -np.dot(weights, log_observed - log_visible)
+
+    fitted = minimize_scalar(loss, bounds=(.55, .92), method="bounded")
+    return float(fitted.x) if fitted.success else None
+
+
 class EMReconciledVeto:
     """Compact fitting-only EM summary that adapts retention alpha to each scored batch."""
 
@@ -196,7 +216,19 @@ class EMReconciledVeto:
             return self.default_alpha
         return float(np.clip(self.n_fit_rows_ / max(1, self.n_fit_rows_ + n_query_rows), 0.55, 0.92))
 
-    def predict(self, query):
+    def warm_batch_alpha(self, query_counts, use_seen_retention):
+        n_query = sum(query_counts.values())
+        nominal = self.batch_alpha(n_query)
+        if not use_seen_retention or n_query < self.min_batch_for_alpha:
+            return nominal
+        counts = self.zeros_.copy()
+        counts.update({key: sum(paid.values()) for key, paid in self.paid_.items()})
+        estimate = estimate_seen_retention(counts, query_counts)
+        # Ignore sampling noise on ordinary row holdouts. A gap of this size
+        # indicates that the query includes a separate cohort of whole profiles.
+        return estimate if estimate is not None and estimate - nominal >= .025 else nominal
+
+    def predict(self, query, *, use_seen_retention=False):
         n_rows = len(query)
         warm = np.zeros(n_rows, dtype=bool)
         is_reconciled = np.zeros(n_rows, dtype=bool)
@@ -208,7 +240,7 @@ class EMReconciledVeto:
         query_counts = Counter(keys)
         if not any(k in self.paid_ for k in query_counts):
             return warm, is_reconciled, p_em, em_mass
-        alpha = self.batch_alpha(n_rows)
+        alpha = self.warm_batch_alpha(query_counts, use_seen_retention)
         em = ExactEMDeconvolution(alpha=alpha, n_iter=80).fit_counts(self.obs_counts_)
         for idx, key in enumerate(keys):
             paid = self.paid_.get(key)

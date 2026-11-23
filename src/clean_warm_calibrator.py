@@ -18,18 +18,22 @@ from src.exact_em_deconvolution import (
 )
 from src.feature_schema import RANDOM_SEED
 from src.masked_payout_history import aggregate_history, masked_states
+from src.masked_quote_pricing import MaskedQuotePricing, masked_quote_targets
 from src.profile_count_survival import COUNT, possible_scoring_counts
+from src.warm_source_context import WarmSourceContext
 
 
 class CleanWarmCalibrator:
     """Calibrate warm claim probabilities without high-cardinality profile memorization."""
 
-    def __init__(self, alpha=0.80, random_seed=RANDOM_SEED):
+    def __init__(self, alpha=0.80, random_seed=RANDOM_SEED, fit_quote_pricing=False, source_context=False):
         self.alpha = alpha
         self.random_seed = random_seed
+        self.fit_quote_pricing = fit_quote_pricing
+        self.source_context = source_context
 
     def _feature_row(self, seen_zero, seen_paid, total_rows, exposure, veh_age, bonus_malus,
-                     supports, em_global, em_strats, own_full_paid=None):
+                     supports, em_global, em_strats, own_full_paid=None, context=None):
         whole_sup, scaled_sup, sum_sup, split_sup = supports
         cent = {b: n for (b, w), n in seen_paid.items() if w}
         scaled = {b: n for (b, w), n in seen_paid.items() if not w}
@@ -62,7 +66,7 @@ class CleanWarmCalibrator:
         ps, ds = em_strats[stratum].predict_state(state, nq, fallback=pg_sm) if stratum in em_strats else (pg_sm, 0.0)
         ps_sm = (ds * ps + 5e-4 * pg_sm) / (ds + 5e-4)
         euros = anchor / 100.0
-        return (
+        design = (
             seen_zero, nw, ns, len(cent), len(scaled),
             sum(n >= 2 for n in cent.values()), sum(n >= 2 for n in scaled.values()),
             float(ns == 0), float(nw == 0), reconciled, float(top_s > sum_w > 0),
@@ -77,6 +81,7 @@ class CleanWarmCalibrator:
             float(exposure), float(exposure >= 0.999), float(veh_age),
             float(bonus_malus == 50), min(float(bonus_malus), 150.0),
         )
+        return design + context.describe(cent, scaled, veh_age) if context is not None else design
 
     def _fit_em_pair(self, keys, supports, global_iter, strat_iter):
         global_obs, strat_obs = Counter(), defaultdict(Counter)
@@ -94,6 +99,7 @@ class CleanWarmCalibrator:
         return em_g, em_s
 
     def fit(self, features, amounts):
+        self.quote_pricing_ = None
         keys, self.zeros_, self.paid_ = aggregate_history(features, amounts)
         self.supports_ = source_supports(self.paid_)
         warm_keys = np.array(list(self.paid_.keys()))
@@ -104,22 +110,27 @@ class CleanWarmCalibrator:
         first_pos = {keys[i]: i for i in np.flatnonzero(~pd.Index(keys).duplicated()) if keys[i] in self.paid_}
         # Cross-fit EM priors by profile so masked-state trees do not overfit EM on training profiles.
         fold_em = {}
+        ages = features["feature3"].to_numpy(dtype=float)
+        vehicle_ages = {key: ages[pos] for key, pos in first_pos.items()}
+        self.source_context_ = WarmSourceContext().fit(self.paid_, vehicle_ages) if self.source_context else None
         for tr_idx, va_idx in GroupKFold(n_splits=3).split(warm_keys, groups=warm_keys):
             tr_keys = warm_keys[tr_idx]
-            tr_supports = source_supports({k: self.paid_[k] for k in tr_keys})
+            tr_paid = {k: self.paid_[k] for k in tr_keys}
+            tr_supports = source_supports(tr_paid)
             em_pair = self._fit_em_pair(tr_keys, tr_supports, global_iter=70, strat_iter=45)
+            context = WarmSourceContext().fit(tr_paid, vehicle_ages) if self.source_context else None
             for key in warm_keys[va_idx]:
-                fold_em[key] = em_pair
+                fold_em[key] = (*em_pair, context)
         self.em_g_, self.em_s_ = self._fit_em_pair(warm_keys, self.supports_, global_iter=80, strat_iter=50)
 
         ret_grid = (max(0.65, self.alpha - 0.05), min(0.92, self.alpha + 0.07))
         exp_arr = features["feature1"].to_numpy(dtype=float)
-        veh_arr = features["feature3"].to_numpy(dtype=float)
+        veh_arr = ages
         bm_arr = features["feature10"].to_numpy(dtype=float)
 
-        x_rows, y_rows, w_rows = [], [], []
+        x_rows, y_rows, w_rows, quotes, quote_targets = [], [], [], [], []
         for key in warm_keys:
-            pos, (em_g, em_s) = first_pos[key], fold_em[key]
+            pos, (em_g, em_s, context) = first_pos[key], fold_em[key]
             z0, p0, agg = self.zeros_[key], self.paid_[key], {}
             for ret in ret_grid:
                 for sz, sp, neg, pos_m in masked_states(z0, p0, ret):
@@ -139,10 +150,14 @@ class CleanWarmCalibrator:
                 if m_sum >= 1e-8:
                     x_rows.append(self._feature_row(
                         sz, dict(sp_items), tot, exp_arr[pos], veh_arr[pos], bm_arr[pos],
-                        self.supports_, em_g, em_s, own_full_paid=p0,
+                        self.supports_, em_g, em_s, own_full_paid=p0, context=context,
                     ))
                     y_rows.append(mr_sum / m_sum)
                     w_rows.append(m_sum)
+                    if self.fit_quote_pricing:
+                        support, target = masked_quote_targets(p0, Counter(dict(sp_items)), mr_sum / m_sum)
+                        quotes.append(support)
+                        quote_targets.append(target)
 
         if not x_rows:
             self.lgb_, self.cb_ = None, None
@@ -150,6 +165,10 @@ class CleanWarmCalibrator:
         X = np.asarray(x_rows, dtype=float)
         y = np.asarray(y_rows, dtype=float)
         w = np.asarray(w_rows, dtype=float)
+        if self.fit_quote_pricing:
+            self.quote_pricing_ = MaskedQuotePricing().fit(
+                X, np.asarray(quotes), np.asarray(quote_targets), w, self.random_seed,
+            )
         self.lgb_ = LGBMRegressor(
             objective="cross_entropy", n_estimators=220, num_leaves=10, min_child_samples=90,
             learning_rate=0.03, reg_lambda=50.0, subsample=0.8, colsample_bytree=0.8,
@@ -167,10 +186,13 @@ class CleanWarmCalibrator:
         return self
 
     def predict(self, query):
+        return self.predict_with_quotes(query)[0]
+
+    def predict_with_quotes(self, query, original=None, floor=1.):
         n_rows = len(query)
         probabilities = np.zeros(n_rows, dtype=float)
         if n_rows == 0 or self.lgb_ is None or self.cb_ is None:
-            return probabilities
+            return probabilities, original
         keys = profile_keys(query)
         query_counts = Counter(keys)
         exp_arr = query["feature1"].to_numpy(dtype=float)
@@ -186,11 +208,14 @@ class CleanWarmCalibrator:
             warm_idx.append(idx)
             feats.append(self._feature_row(
                 self.zeros_[key], paid, tot, exp_arr[idx], veh_arr[idx], bm_arr[idx],
-                self.supports_, self.em_g_, self.em_s_,
+                self.supports_, self.em_g_, self.em_s_, context=getattr(self, "source_context_", None),
             ))
         if warm_idx:
             Xq = np.asarray(feats, dtype=float)
             p_lgb = np.clip(self.lgb_.predict(Xq), 1e-4, 1.0 - 1e-4)
             p_cb = np.clip(self.cb_.predict_proba(Xq)[:, 1], 1e-4, 1.0 - 1e-4)
             probabilities[warm_idx] = 0.5 * p_lgb + 0.5 * p_cb
-        return probabilities
+            if original is not None and getattr(self, "quote_pricing_", None) is not None:
+                original = original.copy()
+                original[warm_idx] = self.quote_pricing_.predict(Xq, original[warm_idx], floor)
+        return probabilities, original

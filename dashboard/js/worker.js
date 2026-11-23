@@ -1,5 +1,5 @@
 /* Query original binary scores together with every retained study observation. */
-importScripts("checkpoint_points.js", "grouping.js" + self.location.search, "data.js");
+importScripts("checkpoint_points.js" + self.location.search, "grouping.js" + self.location.search, "data.js");
 
 const dataDirectory = new URL("../data/", self.location.href);
 let data, historicalLoad, historicalCount;

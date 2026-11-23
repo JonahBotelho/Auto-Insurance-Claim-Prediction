@@ -262,7 +262,7 @@ def prompt_settings(defaults):
     )
 
 
-def confirm_training(settings, output_path):
+def confirm_training(settings, output_path, *, full_fit_only=False):
     print("\nTraining configuration:")
     if settings.reproduction is not None:
         from src.dashboard_config import print_dashboard_configuration
@@ -280,9 +280,13 @@ def confirm_training(settings, output_path):
         print(f"Severity: {SEVERITY_METHOD_LABELS[settings.severity_method]}; Ridge alpha: {settings.ridge_alpha}; multiplier: {settings.severity_scale}")
     print(f"Thresholds: {settings.min_threshold / THRESHOLD_SCALE:.3f}-{settings.max_threshold / THRESHOLD_SCALE:.3f} "
           f"in 0.01 steps, including both bounds ({len(settings.threshold_candidates())} candidates)")
-    print(f"Minimum mean CV claim F1 for threshold selection: {settings.min_claim_f1:.3f}")
-    print(f"Split: {100 - settings.evaluation_percent}% training / {settings.evaluation_percent}% evaluation; CV folds: {settings.n_splits}")
-    print(f"Evaluation/model seed: {settings.random_seed}; oversampling sampling seed: {RANDOM_SEED}")
-    print("The split is for evaluation; the saved model is refitted on all rows.")
+    if full_fit_only:
+        print(f"Model seed: {settings.random_seed}")
+        print("The model is fitted on all labeled rows using the configured policy.")
+    else:
+        print(f"Minimum mean CV claim F1 for threshold selection: {settings.min_claim_f1:.3f}")
+        print(f"Split: {100 - settings.evaluation_percent}% training / {settings.evaluation_percent}% evaluation; CV folds: {settings.n_splits}")
+        print(f"Evaluation/model seed: {settings.random_seed}; oversampling sampling seed: {RANDOM_SEED}")
+        print("The split is for evaluation; the saved model is refitted on all rows.")
     print(f"Model output: {output_path} (replaces the file if it already exists)")
     input("Press Enter to start training, or Ctrl+C to cancel: ")

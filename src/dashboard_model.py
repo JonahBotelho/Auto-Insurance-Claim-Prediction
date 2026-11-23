@@ -4,7 +4,8 @@ import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator, RegressorMixin
 
-from src.dashboard_classifiers import build_dashboard_classifier, prepare_dashboard_features
+from src.claim_composition_history import ClaimCompositionHistory
+from src.dashboard_classifiers import build_dashboard_classifier, fit_history_blend, prepare_dashboard_features
 from src.feature_schema import (
     ALL_FEATURE_COLUMNS, DASHBOARD_CLASSIFIER_LABELS, DASHBOARD_SEVERITY_LABELS,
     PROFILE_HISTORY_COLUMNS, PROFILE_LOG_AMOUNT_COLUMN, PROFILE_LOG_AMOUNT_VARIANCE_COLUMN,
@@ -55,11 +56,14 @@ class DashboardClaimModel(RegressorMixin, BaseEstimator):
         if settings.get("amount_history"):
             classifier_features = self._add_amount_history(features, classifier_features, amounts)
         self.classifier_ = None
+        self.history_blend_ = ()
         if settings["family"] != "posterior":
             prepared = prepare_dashboard_features(classifier_features, settings["family"])
             sampled, labels, self.prior_ratio_ = oversample_claims(prepared, claims, settings["oversampling"])
             self.classifier_ = build_dashboard_classifier(settings, self.random_seed)
             self.classifier_.fit(sampled, labels)
+            if settings.get("blend_history_classifiers"):
+                self.history_blend_ = fit_history_blend(sampled, labels, settings, self.random_seed)
         self.regressor_ = build_claim_severity_pipeline(ridge_alpha=self.ridge_alpha)
         self.regressor_.fit(features.loc[amounts > 0], amounts[amounts > 0])
         self.payout_pricer_ = None
@@ -78,6 +82,8 @@ class DashboardClaimModel(RegressorMixin, BaseEstimator):
         log_amount = np.log1p(amounts)
         self.log_amount_sums_ = pd.Series(log_amount).groupby(keys).sum()
         self.log_amount_prior_ = log_amount[amounts > 0].mean()
+        if self.classifier_settings.get("payout_composition_history"):
+            self.composition_history_ = ClaimCompositionHistory().fit(keys, amounts)
         if self.classifier_settings.get("extended_amount_history"):
             self.extended_amount_sums_ = _extended_amount_statistics(amounts).groupby(keys).sum()
         positive = pd.DataFrame({"key": keys[amounts > 0], "log": np.log(amounts[amounts > 0])})
@@ -104,6 +110,9 @@ class DashboardClaimModel(RegressorMixin, BaseEstimator):
         )
         if self.classifier_settings.get("extended_amount_history"):
             self._add_extended_amount_history(result, keys, count, own_amounts)
+        if self.classifier_settings.get("payout_composition_history"):
+            design = self.composition_history_.transform(keys, features.index, own_amounts)
+            result[design.columns] = design.to_numpy()
         return result
 
     def _add_extended_amount_history(self, result, keys, count, own_amounts):
@@ -127,7 +136,14 @@ class DashboardClaimModel(RegressorMixin, BaseEstimator):
         if settings["family"] == "posterior":
             return prepared[PROFILE_HISTORY_COLUMNS[2]].to_numpy()
         prepared = prepare_dashboard_features(prepared, settings["family"])
-        return correct_claim_probabilities(self.classifier_.predict_proba(prepared)[:, 1], self.prior_ratio_)
+        probability = correct_claim_probabilities(self.classifier_.predict_proba(prepared)[:, 1], self.prior_ratio_)
+        blend = getattr(self, "history_blend_", ())
+        if blend:
+            numeric = prepare_dashboard_features(prepared, "lgbm")
+            alternatives = [correct_claim_probabilities(model.predict_proba(numeric)[:, 1], self.prior_ratio_)
+                            for model in blend]
+            probability = 0.50 * probability + 0.25 * (alternatives[0] + alternatives[1])
+        return probability
 
     def _predict_amount(self, features, probability):
         fallback = np.maximum(0, self.regressor_.predict(features))

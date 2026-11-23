@@ -10,6 +10,7 @@ from sklearn.preprocessing import StandardScaler
 from src.profile_claim_presence import group_frame, presence_forecast
 from src.feature_schema import RANDOM_SEED
 from src.payout_source_calibration import PayoutSourceCalibration
+from src.payout_source_evidence import STRUCTURAL_COLUMNS
 
 
 def expert_forecasts(train, query):
@@ -34,18 +35,21 @@ def head_forecasts(data):
 
 
 def gate_inputs(rows, first, second, peers):
-    return np.column_stack([
+    original = np.column_stack([
         np.log1p(rows.prior_positives), np.log1p(rows.prior_zeros), np.log1p(peers),
         rows.scaled_only, rows.whole_only, rows.copies_complete, rows.sum_attested,
         rows.log_source_ratio, rows.gap_fraction, rows.price_log, rows.exposure, rows.vehicle_age_code,
         np.clip((first + second) / 2, .03, .88), second - first,
     ]).astype(float)
+    if STRUCTURAL_COLUMNS[0] in rows:
+        return np.column_stack([original, rows[list(STRUCTURAL_COLUMNS)].to_numpy()])
+    return original
 
 
 class ProfileRankGate:
-    def fit(self, rows):
+    def fit(self, rows, forecasts=None):
         known = rows.prior_positives.gt(0)
-        first, second, peers = head_forecasts(rows)
+        first, second, peers = head_forecasts(rows) if forecasts is None else forecasts
         first, second, peers = first[known], second[known], peers[known]
         known_rows = rows.loc[known]
         labels = known_rows.actual.gt(0).to_numpy(dtype=float)

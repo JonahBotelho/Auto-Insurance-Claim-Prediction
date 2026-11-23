@@ -41,6 +41,22 @@ def refine_low_quotes(tail, query, original, paid, low_risk):
     return np.where(selected, candidate, original)
 
 
+def cap_to_observed_payout_support(query, prices, flags, paid, floor):
+    """Cap flagged quotes at the highest payout supported by their observed history."""
+    selected = np.flatnonzero(flags & (prices > floor))
+    if not len(selected):
+        return prices
+    result = prices.copy()
+    limit = {}
+    for index, key in zip(selected, profile_keys(query.iloc[selected]), strict=True):
+        history = paid.get(key)
+        if history:
+            if key not in limit:
+                limit[key] = max(floor, float(observed_support(history).max()))
+            result[index] = min(result[index], limit[key])
+    return result
+
+
 class LocalTailRefinement:
     """Keep positive flags and lower only quotes with weak payout support."""
 

@@ -53,17 +53,22 @@ class ProfileHistoryEnsemble(RegressorMixin, BaseEstimator):
 
     def fit(self, features, amounts):
         amounts = np.asarray(amounts)
-        claims = amounts > 0
-        splitter = StratifiedKFold(self.n_splits, shuffle=True, random_state=self.random_seed)
-        folds = []
-        for fold, (training, validation) in enumerate(splitter.split(features, claims), 1):
-            fitted = self._fit_components(features.iloc[training], amounts[training], price=False)
-            scores, _ = self._scores(fitted, features.iloc[validation])
-            folds.append(scores.assign(claim=claims[validation], actual=amounts[validation], fold=fold))
-        self._fit_calibrators(pd.concat(folds))
+        repetitions = getattr(self, "history_crossfit_repeats", 1)
+        folds = [panel for repeat in range(repetitions)
+                 for panel in self._calibration_folds(features, amounts, repeat)]
+        self._fit_calibrators(pd.concat(folds, ignore_index=repetitions > 1))
         self.components_ = self._fit_components(features, amounts, price=True)
         self.n_features_in_ = features.shape[1]
         return self
+
+    def _calibration_folds(self, features, amounts, repeat):
+        claims = amounts > 0
+        splitter = StratifiedKFold(self.n_splits, shuffle=True, random_state=self.random_seed + repeat)
+        first_fold = self.n_splits * repeat + 1
+        for fold, (training, validation) in enumerate(splitter.split(features, claims), first_fold):
+            fitted = self._fit_components(features.iloc[training], amounts[training], price=False)
+            scores, _ = self._scores(fitted, features.iloc[validation])
+            yield scores.assign(claim=claims[validation], actual=amounts[validation], fold=fold)
 
     def _fit_calibrators(self, data):
         known = data.loc[data.prior_positives.gt(0)]

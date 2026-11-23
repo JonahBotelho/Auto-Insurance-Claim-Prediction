@@ -58,7 +58,7 @@ def cohort_splits(data, cohort, seeds):
     raise ValueError(f"Unsupported cohort '{cohort}'. Choose from {ALL_COHORTS}.")
 
 
-def run_cohort(data, config, cohort, seeds):
+def run_cohort(data, config, cohort, seeds, *, show_components=True):
     print(f"\nCohort: {cohort} (seeds {', '.join(map(str, seeds))})", flush=True)
     metrics, frames = [], []
     with threadpool_limits(limits=2):
@@ -68,17 +68,16 @@ def run_cohort(data, config, cohort, seeds):
             target, actual = fitting[TARGET_COLUMN].to_numpy(), held[TARGET_COLUMN].to_numpy()
             model.fit(features, target)
 
-            base_risk, base_prices, base_flags, base_cut = PairwisePayoutEnsemble._score_batch(model, query)
-            pred_base = np.where(base_flags, base_prices, 0.0)
-            _, pt_prices, pt_flags = model.timeline_.augment_predictions(query, base_risk, base_prices, base_flags, base_cut)
-            pred_pt = np.where(pt_flags, pt_prices, 0.0)
-            pred_cr = model.predict(query)
-
-            predictions = {
-                "pairwise_base": pred_base,
-                "pairwise_bm_timeline": pred_pt,
-                "count_retrieval_bm_timeline": pred_cr,
-            }
+            if show_components:
+                base_risk, base_prices, base_flags, base_cut = PairwisePayoutEnsemble._score_batch(model, query)
+                _, pt_prices, pt_flags = model.timeline_.augment_predictions(query, base_risk, base_prices, base_flags, base_cut)
+                predictions = {
+                    "pairwise_base": np.where(base_flags, base_prices, 0.0),
+                    "pairwise_bm_timeline": np.where(pt_flags, pt_prices, 0.0),
+                    "count_retrieval_bm_timeline": model.predict(query),
+                }
+            else:
+                predictions = {"configured": model.predict(query)}
             for name, amounts in predictions.items():
                 f1, mae = claim_scores(actual, amounts)
                 print(f"{seed}  {name:<28} F1 {f1:.8f}  MAE {mae:.8f}", flush=True)
@@ -96,12 +95,14 @@ def run_cohort(data, config, cohort, seeds):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cohorts", nargs="+", default=["matched_20"], choices=ALL_COHORTS)
+    parser.add_argument("--config", type=Path, help="Benchmark a saved native configuration.")
     parser.add_argument("--seeds", nargs="+", type=int, default=list(SEEDS))
     parser.add_argument("--predictions", type=Path, help="Optional CSV or CSV.gz path for per-row predictions.")
     args = parser.parse_args(argv)
     data = load_training_data()
-    config = load_dashboard_settings(CONFIG).reproduction
-    outputs = [run_cohort(data, config, cohort, tuple(args.seeds)) for cohort in args.cohorts]
+    config = load_dashboard_settings(args.config or CONFIG).reproduction
+    outputs = [run_cohort(data, config, cohort, tuple(args.seeds), show_components=args.config is None)
+               for cohort in args.cohorts]
     if args.predictions:
         pd.concat(outputs, ignore_index=True).to_csv(args.predictions, index=False)
 

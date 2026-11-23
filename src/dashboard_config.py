@@ -27,7 +27,10 @@ def validate_dashboard_config(config):
                "payout_source_calibration", "source_tail_pricing", "cold_profile_fallback", "cold_payout_tail_pricing",
                "cold_exposure_hazard", "local_tail_pricing", "pairwise_payout_ranking",
                "bonus_malus_timeline", "count_retrieval_refinement",
-               "em_reconciled_bm_v3", "calibrated_l1_pricing"}
+               "em_reconciled_bm_v3", "calibrated_l1_pricing", "masked_quote_pricing",
+               "structural_source_features", "cap_to_payout_support", "retention_adjusted_ranking",
+               "history_crossfit_repeats", "seen_profile_retention", "repeated_quote_pricing",
+               "competing_discounts", "conditional_cold_pricing"}
     if not isinstance(config, dict) or set(config) - allowed:
         raise ValueError("Unknown configuration fields or invalid JSON configuration object.")
     if type(config.get("schema_version")) is not int or config["schema_version"] != CONFIG_FILE_SCHEMA_VERSION:
@@ -37,7 +40,7 @@ def validate_dashboard_config(config):
         raise ValueError("Choose a supported classifier family.")
     allowed_classifier = {"name", "family", "iterations", "rate", "leaves", "leaf", "depth", "l2",
                           "oversampling", "smoothing", "early_stopping", "amount_history",
-                          "extended_amount_history"}
+                          "extended_amount_history", "blend_history_classifiers", "payout_composition_history"}
     if set(settings) - allowed_classifier:
         raise ValueError("Unknown classifier configuration field.")
     validate_oversampling_percent(settings.get("oversampling"))
@@ -48,7 +51,13 @@ def validate_dashboard_config(config):
         raise ValueError("Extended amount history must be true or false.")
     if settings.get("extended_amount_history") and not settings.get("amount_history"):
         raise ValueError("Extended amount history requires past-amount history.")
+    composition = settings.get("payout_composition_history", False)
+    if type(composition) is not bool or (composition and not settings.get("amount_history")):
+        raise ValueError("Payout composition history requires past-amount history.")
     family = settings["family"]
+    blend = settings.get("blend_history_classifiers", False)
+    if type(blend) is not bool or (blend and family != "hist"):
+        raise ValueError("History classifier blending is a boolean option for the histogram classifier.")
     if family != "posterior":
         keys = ["leaf"] if family in ["forest", "extra"] else ["iterations"]
         keys += ["leaves", "leaf"] if family == "hist" else []
@@ -101,6 +110,22 @@ def validate_dashboard_config(config):
         raise ValueError("Calibrated L1 pricing must be true or false.")
     if config.get("calibrated_l1_pricing") and not config.get("em_reconciled_bm_v3"):
         raise ValueError("Calibrated L1 pricing requires EM reconciled BM v3 mode.")
+    masked_pricing = config.get("masked_quote_pricing", False)
+    if type(masked_pricing) is not bool or (masked_pricing and not config.get("calibrated_l1_pricing")):
+        raise ValueError("Masked quote pricing is a boolean option for calibrated L1 pricing.")
+    structural_source = config.get("structural_source_features", False)
+    if type(structural_source) is not bool or (structural_source and not config.get("em_reconciled_bm_v3")):
+        raise ValueError("Structural source features are a boolean option for EM reconciled BM v3 mode.")
+    for name in ("cap_to_payout_support", "retention_adjusted_ranking", "seen_profile_retention",
+                 "competing_discounts", "conditional_cold_pricing"):
+        if type(config.get(name, False)) is not bool or (config.get(name) and not config.get("em_reconciled_bm_v3")):
+            raise ValueError(f"{name} is a boolean option for EM reconciled BM v3 mode.")
+    repeats = config.get("history_crossfit_repeats", 1)
+    if type(repeats) is not int or not 1 <= repeats <= 3 or (repeats > 1 and not config.get("em_reconciled_bm_v3")):
+        raise ValueError("History cross-fitting supports one to three repeats in EM reconciled BM v3 mode.")
+    repeated_quotes = config.get("repeated_quote_pricing", False)
+    if type(repeated_quotes) is not bool or (repeated_quotes and (repeats != 1 or not config.get("calibrated_l1_pricing"))):
+        raise ValueError("Repeated quote pricing requires calibrated L1 pricing and one classification repeat.")
     if type(config.get("source_tail_pricing", False)) is not bool:
         raise ValueError("Source-tail pricing must be true or false.")
     if config.get("source_tail_pricing") and not config.get("payout_source_calibration"):
@@ -163,10 +188,22 @@ def build_dashboard_model(config, threshold):
                 from src.bonus_malus_claim_ensemble import EMTimelineClaimEnsemble
 
                 default_alpha = max(0.55, min(0.92, 1.0 - float(config.get("evaluation_percent", 20)) / 100.0))
-                return EMTimelineClaimEnsemble(
+                ensemble = EMTimelineClaimEnsemble
+                if config.get("repeated_quote_pricing"):
+                    from src.crossfit_quote_ensemble import CrossfitQuoteEMTimelineClaimEnsemble
+                    ensemble = CrossfitQuoteEMTimelineClaimEnsemble
+                return ensemble(
                     baseline, claim_probability_threshold=threshold,
                     n_splits=config.get("n_splits", DEFAULT_CV_FOLDS), random_seed=config["random_seed"],
                     calibrated_l1_pricing=config.get("calibrated_l1_pricing", False),
+                    masked_quote_pricing=config.get("masked_quote_pricing", False),
+                    structural_source_features=config.get("structural_source_features", False),
+                    cap_to_payout_support=config.get("cap_to_payout_support", False),
+                    retention_adjusted_ranking=config.get("retention_adjusted_ranking", False),
+                    history_crossfit_repeats=config.get("history_crossfit_repeats", 1),
+                    seen_profile_retention=config.get("seen_profile_retention", False),
+                    competing_discounts=config.get("competing_discounts", False),
+                    conditional_cold_pricing=config.get("conditional_cold_pricing", False),
                     default_alpha=default_alpha,
                 )
             if config.get("count_retrieval_refinement"):
@@ -227,6 +264,10 @@ def print_dashboard_configuration(settings):
         print("Warm/cold upgrade: EM reconciled veto + Bonus-Malus timeline v3 with joint expected-F1 cutoff")
     if config.get("calibrated_l1_pricing"):
         print("Calibrated L1 pricing: $1 floor when calibrated claim risk (0.50*anchor + 0.50*clean_warm) < 0.48")
+    if config.get("competing_discounts"):
+        print("Timeline linkage: consider compatible anniversary discounts as competing successors")
+    if config.get("conditional_cold_pricing"):
+        print("Timeline quotes: conditional payout quantiles for high-confidence admissions")
     if config.get("source_tail_pricing"):
         print("Payout floor: source-specific fitted lower tails")
     if config.get("local_tail_pricing"):

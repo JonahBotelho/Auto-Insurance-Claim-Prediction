@@ -1,13 +1,16 @@
 """Learn a remaining-claims distribution from exactly thinned payout histories."""
 
 from functools import lru_cache
+from functools import partial
 
 from lightgbm import LGBMRegressor
 import numpy as np
 import pandas as pd
 from scipy.stats import binom, hypergeom
 
-from src.masked_payout_history import history_design, aggregate_history, describe_history, masked_states
+from src.masked_payout_history import (
+    HISTORY_COLUMNS, PAYOUT_SHAPE_COLUMNS, history_design, aggregate_history, describe_history, masked_states, payout_shape,
+)
 from src.claim_count_mixture import MAX_ROWS
 from src.dashboard_model import profile_keys
 from src.feature_schema import RANDOM_SEED
@@ -29,10 +32,10 @@ def possible_scoring_counts(missing_rows, missing_claims):
     return sizes, draw, outcome
 
 
-def masked_scoring_examples(zero, payments, *, zero_only=False):
+def masked_scoring_examples(zero, payments, *, zero_only=False, retention=RETENTION, rich_history=False):
     totals = {}
-    for retention in RETENTION:
-        for seen_zero, seen_paid, negative, positive in masked_states(zero, payments, retention):
+    for retained in retention:
+        for seen_zero, seen_paid, negative, positive in masked_states(zero, payments, retained):
             supported = (seen_zero > 0 and not seen_paid) if zero_only else bool(seen_paid)
             if not supported or negative + positive < 1e-8:
                 continue
@@ -44,8 +47,10 @@ def masked_scoring_examples(zero, payments, *, zero_only=False):
                     continue
                 total = seen_zero + sum(seen_paid.values()) + size
                 inputs = describe_history(seen_zero, seen_paid, total)
+                if rich_history:
+                    inputs += payout_shape(seen_paid)
                 totals.setdefault(inputs, np.zeros(len(COUNT)))
-                totals[inputs] += (negative + positive) * volume * law / len(RETENTION)
+                totals[inputs] += (negative + positive) * volume * law / len(retention)
     return totals.items()
 
 
@@ -61,8 +66,16 @@ def continuation_rows(covariates, outcome):
 class ProfileCountSurvival:
     """Estimate both marginal risk and a distribution of exact profile counts."""
 
+    def __init__(self, retention=RETENTION, rich_history=False):
+        self.retention = retention
+        self.rich_history = rich_history
+
+    def history_columns(self):
+        return HISTORY_COLUMNS + PAYOUT_SHAPE_COLUMNS if getattr(self, "rich_history", False) else HISTORY_COLUMNS
+
     def fit(self, features, target):
-        design, outcome = self.training_panel(features, target, masked_scoring_examples)
+        simulator = partial(masked_scoring_examples, retention=self.retention, rich_history=self.rich_history)
+        design, outcome = self.training_panel(features, target, simulator)
         sample_weight = outcome.sum(axis=1)
         target = (outcome @ COUNT / sample_weight) / design.unseen_rows
         self.point_ = LGBMRegressor(objective="cross_entropy", **PARAMETERS).fit(design, target, sample_weight=sample_weight)
@@ -80,7 +93,7 @@ class ProfileCountSurvival:
                 positions.append(position)
                 histories.append(history)
                 counts.append(mass)
-        design = history_design(features.iloc[positions], histories)
+        design = history_design(features.iloc[positions], histories, self.history_columns())
         return design, np.asarray(counts)
 
     def fit_distribution(self, design, outcome):
@@ -105,8 +118,9 @@ class ProfileCountSurvival:
             histories = []
             for key, remaining in zip(keys[eligible], peers[eligible], strict=True):
                 paid, zero = self.paid_[key], self.zero_[key]
-                histories.append(describe_history(zero, paid, zero + sum(paid.values()) + remaining))
-            design = history_design(features.iloc[first[eligible]], histories)
+                state = describe_history(zero, paid, zero + sum(paid.values()) + remaining)
+                histories.append(state + payout_shape(paid) if getattr(self, "rich_history", False) else state)
+            design = history_design(features.iloc[first[eligible]], histories, self.history_columns())
             probability[eligible] = self.point_.predict(design)
             law[eligible] = self.distributions(design, sizes[eligible])
         return probability[inverse], law, eligible[inverse]

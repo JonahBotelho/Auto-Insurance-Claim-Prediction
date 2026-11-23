@@ -1,5 +1,7 @@
 """Pairwise claim reranking with fitting-derived payout and settlement evidence."""
 
+from collections import Counter
+
 import numpy as np
 import pandas as pd
 from scipy.special import expit
@@ -59,10 +61,10 @@ class PairwisePayoutEnsemble(PayoutSourceClaimEnsemble):
     def _fit_calibrators(self, rows):
         super()._fit_calibrators(rows)
         calibration = rows.assign(probability=self._fold_calibration_forecasts(rows))
-        self.rank_ = ProfileRankGate().fit(calibration)
+        first, second, peers = head_forecasts(calibration)
+        self.rank_ = ProfileRankGate().fit(calibration, (first, second, peers))
         self.presence_ = fit_presence(group_frame(calibration))
         warm = calibration.prior_positives.gt(0).to_numpy()
-        first, second, peers = head_forecasts(calibration)
         supported = calibration.residue_supported.gt(0).to_numpy()
         self.residue_ = fit_residue_shift(calibration.loc[supported], first[supported]) if supported.any() else None
         self.weight_learning_ = calibration.loc[warm]
@@ -93,9 +95,12 @@ class PairwisePayoutEnsemble(PayoutSourceClaimEnsemble):
             return self._score_batch(features)
 
     def _score_batch(self, features):
+        return self._ranked_batch(features)[:4]
+
+    def _ranked_batch(self, features):
         if not len(features):
             empty = np.empty(0)
-            return empty, empty, empty.astype(bool), self.claim_probability_threshold
+            return empty, empty, empty.astype(bool), self.claim_probability_threshold, empty
         rows, fallback = self._scores(self.components_, features)
         prior = self._stack_probability(rows)
         marked, share = self.source_calibration_.predict(rows, prior)
@@ -105,15 +110,24 @@ class PairwisePayoutEnsemble(PayoutSourceClaimEnsemble):
         warm = rows.prior_positives.gt(0).to_numpy()
         if not warm.any():
             cutoff = self.adaptive_claim_threshold(first)
-            return first, prices, first >= cutoff, cutoff
+            return first, prices, first >= cutoff, cutoff, first
         base = self._history_scores(rows, first, prior, warm)
         cutoff = self.adaptive_claim_threshold(base)
         prices = supported_tails(self.relative_pricer_, features, prices, prior, fallback, share)["single_copy_tail"]
         shaped = base.copy()
         shaped[warm] = self.distribution_risk_.predict(rows.loc[warm], base[warm])[1]
-        adjusted = decision_cost(shaped, prices, cutoff)
+        pricing_risk = decision_cost(shaped, prices, cutoff)
+        adjusted = pricing_risk
+        if getattr(self, "retention_adjusted_ranking", False):
+            alpha = self.em_veto_.warm_batch_alpha(
+                Counter(rows.profile.to_numpy()), getattr(self, "seen_profile_retention", False),
+            )
+            # Fewer retained rows make the distribution-derived score and quote less reliable.
+            if alpha < .8:
+                weight = max(0., (alpha - .75) / .05)
+                adjusted = (1. - weight) * base + weight * adjusted
         flags, threshold = fixed_volume(adjusted, base >= cutoff, rows.profile.to_numpy())
-        return adjusted, prices, flags, threshold
+        return adjusted, prices, flags, threshold, pricing_risk
 
     def predict_claim_probability(self, features):
         return self.score_batch(features)[0]

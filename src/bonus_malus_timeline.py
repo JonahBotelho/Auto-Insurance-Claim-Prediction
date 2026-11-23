@@ -95,6 +95,12 @@ def _find_tier_jumps(profiles, block_cols, tier, max_group=120, diff_col=None):
         valid &= (pairs["feature17_n"] > pairs["feature17_t"]) & (delta_lic >= 2)
     elif tier == 2:
         valid &= (exact_rule > 0) & (delta_lic >= 2) & (overlap >= 2.0)
+    elif tier == 4:
+        valid &= (
+            (pairs["feature17_n"] < pairs["feature17_t"]) & (exact_rule > 0)
+            & (delta_lic >= 2) & (overlap >= 2.0)
+            & (pairs["feature1_t"] + pairs["feature1_n"] - 1.).abs().le(.025)
+        )
     if not valid.any():
         return pd.DataFrame()
 
