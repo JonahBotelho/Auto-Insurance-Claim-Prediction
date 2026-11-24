@@ -30,7 +30,8 @@ def validate_dashboard_config(config):
                "em_reconciled_bm_v3", "calibrated_l1_pricing", "masked_quote_pricing",
                "structural_source_features", "cap_to_payout_support", "retention_adjusted_ranking",
                "history_crossfit_repeats", "seen_profile_retention", "repeated_quote_pricing",
-               "competing_discounts", "conditional_cold_pricing"}
+               "competing_discounts", "conditional_cold_pricing",
+               "sibling_effective_em", "rich_ensemble_pricing"}
     if not isinstance(config, dict) or set(config) - allowed:
         raise ValueError("Unknown configuration fields or invalid JSON configuration object.")
     if type(config.get("schema_version")) is not int or config["schema_version"] != CONFIG_FILE_SCHEMA_VERSION:
@@ -117,9 +118,12 @@ def validate_dashboard_config(config):
     if type(structural_source) is not bool or (structural_source and not config.get("em_reconciled_bm_v3")):
         raise ValueError("Structural source features are a boolean option for EM reconciled BM v3 mode.")
     for name in ("cap_to_payout_support", "retention_adjusted_ranking", "seen_profile_retention",
-                 "competing_discounts", "conditional_cold_pricing"):
+                 "competing_discounts", "conditional_cold_pricing", "sibling_effective_em"):
         if type(config.get(name, False)) is not bool or (config.get(name) and not config.get("em_reconciled_bm_v3")):
             raise ValueError(f"{name} is a boolean option for EM reconciled BM v3 mode.")
+    rich_pricing = config.get("rich_ensemble_pricing", False)
+    if type(rich_pricing) is not bool or (rich_pricing and not config.get("calibrated_l1_pricing")):
+        raise ValueError("Rich ensemble pricing is a boolean option for calibrated L1 pricing.")
     repeats = config.get("history_crossfit_repeats", 1)
     if type(repeats) is not int or not 1 <= repeats <= 3 or (repeats > 1 and not config.get("em_reconciled_bm_v3")):
         raise ValueError("History cross-fitting supports one to three repeats in EM reconciled BM v3 mode.")
@@ -204,6 +208,8 @@ def build_dashboard_model(config, threshold):
                     seen_profile_retention=config.get("seen_profile_retention", False),
                     competing_discounts=config.get("competing_discounts", False),
                     conditional_cold_pricing=config.get("conditional_cold_pricing", False),
+                    sibling_effective_em=config.get("sibling_effective_em", False),
+                    rich_ensemble_pricing=config.get("rich_ensemble_pricing", False),
                     default_alpha=default_alpha,
                 )
             if config.get("count_retrieval_refinement"):
@@ -268,6 +274,10 @@ def print_dashboard_configuration(settings):
         print("Timeline linkage: consider compatible anniversary discounts as competing successors")
     if config.get("conditional_cold_pricing"):
         print("Timeline quotes: conditional payout quantiles for high-confidence admissions")
+    if config.get("sibling_effective_em"):
+        print("EM veto roster: complementary-exposure sibling effective roster sizing")
+    if config.get("rich_ensemble_pricing"):
+        print("Warm pricing: multi-expert mixture-median quoting with $0.01 low-confidence floor")
     if config.get("source_tail_pricing"):
         print("Payout floor: source-specific fitted lower tails")
     if config.get("local_tail_pricing"):

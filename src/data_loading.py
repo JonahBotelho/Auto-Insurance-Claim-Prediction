@@ -12,12 +12,15 @@ from src.feature_schema import (
     FEATURE1_CUBED_COLUMN,
     FEATURE1_SQUARED_COLUMN,
     HAS_CLAIM_COLUMN,
+    PROFILE_COLUMNS,
+    ROW_INDEX_COLUMN,
     TARGET_COLUMN,
 )
 
 DATA_DIRECTORY = Path(__file__).resolve().parents[1] / "data"
 DEFAULT_TRAINING_PATH = DATA_DIRECTORY / "trainingset.csv"
 DEFAULT_TEST_PATH = DATA_DIRECTORY / "testset.csv"
+REQUIRED_PREDICTION_COLUMNS = (ROW_INDEX_COLUMN, *PROFILE_COLUMNS)
 
 
 def _add_feature1_polynomial_terms(data: pd.DataFrame) -> pd.DataFrame:
@@ -26,13 +29,27 @@ def _add_feature1_polynomial_terms(data: pd.DataFrame) -> pd.DataFrame:
     return data
 
 
-def _read_csv_with_typed_categories(path: Path) -> pd.DataFrame:
-    data = pd.read_csv(path)
+def _prepare_typed_features(data: pd.DataFrame) -> pd.DataFrame:
     # Cast explicitly so categorical columns are never mistaken for plain
     # numbers downstream (e.g. accidentally scaled instead of one-hot encoded).
     for column in CATEGORICAL_FEATURES:
         data[column] = data[column].astype("category")
     return _add_feature1_polynomial_terms(data)
+
+
+def _read_csv_with_typed_categories(path: Path) -> pd.DataFrame:
+    return _prepare_typed_features(pd.read_csv(path))
+
+
+def load_test_data_from_buffer(buffer) -> pd.DataFrame:
+    """Load and validate an uploaded CSV stream using the exact inference preprocessing."""
+    data = pd.read_csv(buffer)
+    missing = [column for column in REQUIRED_PREDICTION_COLUMNS if column not in data.columns]
+    if missing:
+        raise ValueError(f"Missing required column(s): {', '.join(missing)}")
+    if data.empty:
+        raise ValueError("The uploaded CSV contains no data rows.")
+    return _prepare_typed_features(data)
 
 
 def load_training_data(path: Path = DEFAULT_TRAINING_PATH) -> pd.DataFrame:

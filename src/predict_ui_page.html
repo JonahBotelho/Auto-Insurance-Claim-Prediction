@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Claim Amount Predictor — Model 1200001 / 1200002</title>
+<style>
+  :root { color-scheme: light; --bg: #f6f7f9; --card: #ffffff; --border: #d9dfe7; --text: #1b2430; --muted: #5a6577; --accent: #1d4ed8; --accent-hover: #1e40af; --ok-bg: #eef7f1; --ok-border: #b7dfc4; --err-bg: #fef2f2; --err-border: #fecaca; --err-text: #991b1b; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+  .card { width: 100%; max-width: 560px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 28px; box-shadow: 0 4px 18px rgba(15, 23, 42, 0.05); }
+  .badge { display: inline-block; font-size: 12px; font-weight: 600; color: var(--accent); background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 999px; padding: 4px 10px; margin-bottom: 10px; }
+  h1 { margin: 0 0 6px; font-size: 22px; }
+  .subtitle { margin: 0 0 20px; font-size: 14px; color: var(--muted); line-height: 1.45; }
+  .dropzone { border: 1.5px dashed #b8c4d4; border-radius: 10px; padding: 24px 16px; text-align: center; cursor: pointer; background: #fafbfc; transition: border-color 0.15s, background 0.15s; }
+  .dropzone.active { border-color: var(--accent); background: #eff6ff; }
+  .dropzone strong { display: block; font-size: 14px; margin-bottom: 4px; }
+  .dropzone span { font-size: 13px; color: var(--muted); }
+  .field { margin-top: 16px; }
+  label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+  input[type="text"] { width: 100%; padding: 9px 11px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; }
+  .actions { margin-top: 18px; display: flex; gap: 10px; }
+  button { flex: 1; padding: 11px 16px; border: 0; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .primary { background: var(--accent); color: #fff; }
+  .primary:hover:not(:disabled) { background: var(--accent-hover); }
+  .primary:disabled { opacity: 0.45; cursor: not-allowed; }
+  .secondary { background: #eef2f7; color: var(--text); }
+  .secondary:hover { background: #e2e8f0; }
+  .status { margin-top: 16px; font-size: 13px; color: var(--muted); }
+  .result { margin-top: 18px; padding: 16px; border-radius: 10px; background: var(--ok-bg); border: 1px solid var(--ok-border); }
+  .result-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
+  .metric-label { font-size: 12px; color: var(--muted); }
+  .metric-value { font-size: 16px; font-weight: 700; margin-top: 2px; }
+  .error { margin-top: 16px; padding: 12px 14px; border-radius: 8px; background: var(--err-bg); border: 1px solid var(--err-border); color: var(--err-text); font-size: 13px; }
+  .hint { margin-top: 10px; font-size: 12px; color: var(--muted); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main class="card">
+  <span class="badge">Model 1200001 / 1200002 &middot; Predict Only</span>
+  <h1>Claim Amount Predictor</h1>
+  <p class="subtitle">Choose <code>competitionset.csv</code> (or any CSV with <code>rowIndex</code> and <code>feature1</code>&ndash;<code>feature18</code>), run offline prediction, and save <code>predictedclaimamount.csv</code> to a folder of your choice.</p>
+
+  <input id="fileInput" type="file" accept=".csv,text/csv" hidden>
+  <div id="dropzone" class="dropzone" role="button" tabindex="0" aria-label="Choose input CSV file">
+    <strong id="fileLabel">Click to choose a CSV file or drag and drop here</strong>
+    <span id="fileMeta">No file selected</span>
+  </div>
+
+  <div class="field">
+    <label for="outputName">Output filename</label>
+    <input id="outputName" type="text" value="predictedclaimamount.csv" spellcheck="false">
+  </div>
+
+  <div class="actions">
+    <button id="runButton" class="primary" type="button" disabled>Run Prediction</button>
+  </div>
+
+  <p id="status" class="status" role="status" hidden></p>
+  <div id="errorBox" class="error" role="alert" hidden></div>
+
+  <section id="resultBox" class="result" hidden>
+    <div class="result-grid">
+      <div><div class="metric-label">Rows scored</div><div id="totalRows" class="metric-value">-</div></div>
+      <div><div class="metric-label">Non-zero claims</div><div id="nonzeroClaims" class="metric-value">-</div></div>
+      <div><div class="metric-label">Time</div><div id="elapsedTime" class="metric-value">-</div></div>
+    </div>
+    <div class="actions" style="margin-top:0">
+      <button id="saveButton" class="primary" type="button">Save Predictions CSV</button>
+    </div>
+    <p id="saveHint" class="hint"></p>
+  </section>
+</main>
+<script>
+"use strict";
+const fileInput = document.getElementById("fileInput");
+const dropzone = document.getElementById("dropzone");
+const fileLabel = document.getElementById("fileLabel");
+const fileMeta = document.getElementById("fileMeta");
+const outputName = document.getElementById("outputName");
+const runButton = document.getElementById("runButton");
+const statusText = document.getElementById("status");
+const errorBox = document.getElementById("errorBox");
+const resultBox = document.getElementById("resultBox");
+const saveButton = document.getElementById("saveButton");
+const saveHint = document.getElementById("saveHint");
+
+let selectedFile = null;
+let lastBlob = null;
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+  return (bytes / (1024 * 1024)).toFixed(2) + " MB";
+}
+
+function setFile(file) {
+  if (!file) return;
+  selectedFile = file;
+  lastBlob = null;
+  resultBox.hidden = true;
+  errorBox.hidden = true;
+  fileLabel.textContent = file.name;
+  fileMeta.textContent = formatBytes(file.size) + " \u00b7 ready to score";
+  if (!outputName.value.trim()) outputName.value = "predictedclaimamount.csv";
+  runButton.disabled = false;
+}
+
+dropzone.addEventListener("click", () => fileInput.click());
+dropzone.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileInput.click(); } });
+fileInput.addEventListener("change", () => setFile(fileInput.files[0]));
+dropzone.addEventListener("dragover", e => { e.preventDefault(); dropzone.classList.add("active"); });
+dropzone.addEventListener("dragleave", () => dropzone.classList.remove("active"));
+dropzone.addEventListener("drop", e => {
+  e.preventDefault();
+  dropzone.classList.remove("active");
+  if (e.dataTransfer.files.length) setFile(e.dataTransfer.files[0]);
+});
+
+runButton.addEventListener("click", async () => {
+  if (!selectedFile) return;
+  errorBox.hidden = true;
+  resultBox.hidden = true;
+  lastBlob = null;
+  runButton.disabled = true;
+  statusText.textContent = "Scoring rows with model 1200001 / 1200002\u2026";
+  statusText.hidden = false;
+  try {
+    const response = await fetch("/api/predict", {
+      method: "POST",
+      headers: { "Content-Type": "text/csv", "X-Filename": outputName.value.trim() || selectedFile.name },
+      body: selectedFile,
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(payload.error || "Prediction request failed (HTTP " + response.status + ").");
+    }
+    lastBlob = await response.blob();
+    const total = Number(response.headers.get("X-Total-Rows") || 0);
+    const nonzero = Number(response.headers.get("X-Nonzero-Claims") || 0);
+    const pct = response.headers.get("X-Nonzero-Percent") || "0.0000";
+    const elapsed = response.headers.get("X-Elapsed-Seconds") || "-";
+    document.getElementById("totalRows").textContent = total.toLocaleString("en-US");
+    document.getElementById("nonzeroClaims").textContent = nonzero.toLocaleString("en-US") + " (" + pct + "%)";
+    document.getElementById("elapsedTime").textContent = elapsed + " s";
+    saveHint.textContent = typeof window.showSaveFilePicker === "function"
+      ? "Choose any destination folder and filename when saving."
+      : "Your browser will save the CSV to your default download location.";
+    resultBox.hidden = false;
+  } catch (err) {
+    errorBox.textContent = err.message || String(err);
+    errorBox.hidden = false;
+  } finally {
+    statusText.hidden = true;
+    runButton.disabled = false;
+  }
+});
+
+saveButton.addEventListener("click", async () => {
+  if (!lastBlob) return;
+  const suggested = (outputName.value.trim() || "predictedclaimamount.csv").replace(/\.csv$/i, "") + ".csv";
+  if (typeof window.showSaveFilePicker === "function") {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: suggested,
+        types: [{ description: "CSV Files", accept: { "text/csv": [".csv"] } }],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(lastBlob);
+      await writable.close();
+      saveHint.textContent = "Saved " + handle.name + ".";
+      return;
+    } catch (err) {
+      if (err && err.name === "AbortError") return;
+    }
+  }
+  const url = URL.createObjectURL(lastBlob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = suggested;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  saveHint.textContent = "Downloaded " + suggested + ".";
+});
+</script>
+</body>
+</html>

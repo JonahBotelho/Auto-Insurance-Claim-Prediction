@@ -98,9 +98,12 @@ class PairwisePayoutEnsemble(PayoutSourceClaimEnsemble):
         return self._ranked_batch(features)[:4]
 
     def _ranked_batch(self, features):
+        return self._ranked_batch_with_context(features)[:5]
+
+    def _ranked_batch_with_context(self, features):
         if not len(features):
             empty = np.empty(0)
-            return empty, empty, empty.astype(bool), self.claim_probability_threshold, empty
+            return empty, empty, empty.astype(bool), self.claim_probability_threshold, empty, empty, empty, empty
         rows, fallback = self._scores(self.components_, features)
         prior = self._stack_probability(rows)
         marked, share = self.source_calibration_.predict(rows, prior)
@@ -110,7 +113,7 @@ class PairwisePayoutEnsemble(PayoutSourceClaimEnsemble):
         warm = rows.prior_positives.gt(0).to_numpy()
         if not warm.any():
             cutoff = self.adaptive_claim_threshold(first)
-            return first, prices, first >= cutoff, cutoff, first
+            return first, prices, first >= cutoff, cutoff, first, prior, fallback, share
         base = self._history_scores(rows, first, prior, warm)
         cutoff = self.adaptive_claim_threshold(base)
         prices = supported_tails(self.relative_pricer_, features, prices, prior, fallback, share)["single_copy_tail"]
@@ -127,7 +130,7 @@ class PairwisePayoutEnsemble(PayoutSourceClaimEnsemble):
                 weight = max(0., (alpha - .75) / .05)
                 adjusted = (1. - weight) * base + weight * adjusted
         flags, threshold = fixed_volume(adjusted, base >= cutoff, rows.profile.to_numpy())
-        return adjusted, prices, flags, threshold, pricing_risk
+        return adjusted, prices, flags, threshold, pricing_risk, prior, fallback, share
 
     def predict_claim_probability(self, features):
         return self.score_batch(features)[0]

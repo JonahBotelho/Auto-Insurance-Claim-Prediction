@@ -3,6 +3,33 @@
 Predict insurance claim amounts (`ClaimAmount`) from 18 anonymized customer and
 vehicle features. `rowIndex` identifies rows and is excluded from model inputs.
 
+## Quick start: Local browser predictor (1200001 / 1200002)
+
+Run offline claim predictions with the selected final submission model
+(**1200001 / 1200002**, pre-trained in
+`models/em_timeline_sibling_rich_pricing_ensemble.joblib`) using the
+predict-only local browser UI (no training step or extra web packages needed):
+
+- **Windows (one-click, auto-sets up `.venv` on a fresh machine)**:
+  double-click `run_predictor.bat` from the repository root.
+- **Cross-platform CLI**:
+
+```powershell
+python -m pip install -r src/predict_requirements.txt
+python -m src.predict_ui
+```
+
+In the browser (`http://127.0.0.1:8001/`), select `competitionset.csv` (or any
+CSV with `rowIndex` and `feature1`–`feature18`), click **Run Prediction**, and
+click **Save Predictions CSV** to save `predictedclaimamount.csv` to a
+directory of your choice.
+
+Headless CLI equivalent:
+
+```powershell
+python -m src.predict --model-path models/em_timeline_sibling_rich_pricing_ensemble.joblib --input competitionset.csv --output predictedclaimamount.csv
+```
+
 Input datasets and the submission template are in `data/`:
 `trainingset.csv`, `testset.csv`, and `submission.csv`.
 
@@ -14,24 +41,38 @@ competition setup, and directions for future experiments.
 
 ## Final competition prediction
 
-The selected submission candidate is dashboard run **1190003**. Its
-Bonus-Malus timeline uses exact successor links, competing discounts, and
-conditional payout quotes for cold profiles. It averaged **0.52348 F1 /
-92.52804 MAE** on 20% matched holdouts across seeds 41–45.
+The selected final submission model is dashboard run **1200001** (20% matched)
+/ **1200002** (25% matched), using
+`configs/claim_history/em_timeline_sibling_rich_pricing_ensemble.json` (both
+runs evaluate the same model configuration on different holdout splits). It
+extends run **1190003** with complementary-exposure sibling effective roster
+sizing for `EMReconciledVeto` (`sibling_effective_em`) and multi-expert warm
+mixture-median pricing with a `$0.01` low-confidence floor
+(`rich_ensemble_pricing`). Across seeds 41–45 it reaches **0.52346 F1 /
+91.92771 MAE** at 20% (`-0.600` MAE), **0.51741 F1 / 91.04931 MAE** at 25%
+(`+0.00149` F1, `-0.528` MAE), **0.41504 F1 / 95.08075 MAE** on 25% mixed
+(`+0.00168` F1, `-0.376` MAE), and **0.15717 F1 / 105.67332 MAE** on 25%
+profile-disjoint (`-0.163` MAE). On fresh seeds 46–50 it improves both metrics
+at 20% (**0.52274 F1 / 95.50189 MAE**) and 25% (**0.50634 F1 / 94.52112 MAE**).
+
+The earlier competition baseline is dashboard run **1190003**
+(`configs/claim_history/em_timeline_discount_quantile_ensemble.json`), which
+averaged **0.52348 F1 / 92.52804 MAE** on 20% matched holdouts and **0.51593 F1
+/ 91.57719 MAE** on 25% matched holdouts (seeds 41–45).
 
 Install dependencies and train from the repository root.
 
 ```powershell
-python -m pip install -r src/optional_requirements.txt
-python -m src.train --config configs/claim_history/em_timeline_discount_quantile_ensemble.json --full-fit-only --model-path models/submission_1190003.joblib
+python -m pip install -r src/predict_requirements.txt
+python -m src.train --config configs/claim_history/em_timeline_sibling_rich_pricing_ensemble.json --full-fit-only --model-path models/em_timeline_sibling_rich_pricing_ensemble.joblib
 ```
 
 Press Enter at the confirmation prompt. Training uses seed 42 and all
-70,000 rows from `data/trainingset.csv`. Use the saved model to score the
-test CSV. For a new competition CSV, replace the `--input` path.
+70,000 rows from `data/trainingset.csv`. Use the saved model to score
+`competitionset.csv` (or replace `--input` with `data/testset.csv`):
 
 ```powershell
-python -m src.predict --model-path models/submission_1190003.joblib --input data/testset.csv --output submission_1190003.csv
+python -m src.predict --model-path models/em_timeline_sibling_rich_pricing_ensemble.joblib --input competitionset.csv --output predictedclaimamount.csv
 ```
 
 The input needs `rowIndex` and the same 18 feature columns as `data/testset.csv`.
@@ -40,7 +81,7 @@ The output contains `rowIndex` and `ClaimAmount` in input row order.
 Reproduce the five-seed matched holdout scores.
 
 ```powershell
-python -m src.reproduce_timeline_models --config configs/claim_history/em_timeline_discount_quantile_ensemble.json --cohorts matched_20 matched_25
+python -m src.reproduce_timeline_models --config configs/claim_history/em_timeline_sibling_rich_pricing_ensemble.json --cohorts matched_20 matched_25
 ```
 
 See [submission details](submission.md#final-competition-submission) for the

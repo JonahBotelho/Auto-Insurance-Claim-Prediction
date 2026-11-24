@@ -1,7 +1,27 @@
 # Training configuration
 
-The final submission candidate is dashboard run **1190003**. See [final
-competition submission](#final-competition-submission) for training and prediction.
+The final submission model is dashboard run **1200001 / 1200002**
+(`configs/claim_history/em_timeline_sibling_rich_pricing_ensemble.json`,
+pre-trained at `models/em_timeline_sibling_rich_pricing_ensemble.joblib`).
+
+For predict-only scoring in a local browser UI (select `competitionset.csv`
+and save `predictedclaimamount.csv` to a directory of your choice),
+double-click `run_predictor.bat` on Windows (auto-creates `.venv` and installs
+`src/predict_requirements.txt` on a fresh machine) or run:
+
+```powershell
+python -m pip install -r src/predict_requirements.txt
+python -m src.predict_ui
+```
+
+Headless CLI equivalent:
+
+```powershell
+python -m src.predict --model-path models/em_timeline_sibling_rich_pricing_ensemble.joblib --input competitionset.csv --output predictedclaimamount.csv
+```
+
+See [final competition submission](#final-competition-submission) for full CLI
+training, prediction, and benchmark details.
 
 ## Run instructions
 
@@ -272,39 +292,53 @@ and recorded 0.160 configuration for `2_2_10`.
 
 ## Final competition submission
 
-The selected submission candidate is dashboard run **1190003**. Its
-Bonus-Malus timeline uses exact successor links, competing discounts, and
-conditional payout quotes for cold profiles. The dashboard lists the run under
-**Native Bonus-Malus successor and pricing follow-up**.
+The selected final submission model is dashboard run **1200001** (20% matched)
+/ **1200002** (25% matched), both evaluating the same configuration
+(`configs/claim_history/em_timeline_sibling_rich_pricing_ensemble.json`). It
+extends previous leader **1190003 / 1190004** with complementary-exposure
+sibling effective roster sizing in `EMReconciledVeto` (`sibling_effective_em`)
+and multi-expert warm mixture-median pricing with a `$0.01` low-confidence
+floor (`rich_ensemble_pricing`). The dashboard lists both runs under
+**Sibling-roster EM and rich-ensemble pricing (seeds 41–45)**.
 
 Install dependencies and train from the repository root.
 
 ```powershell
-python -m pip install -r src/optional_requirements.txt
-python -m src.train --config configs/claim_history/em_timeline_discount_quantile_ensemble.json --full-fit-only --model-path models/submission_1190003.joblib
+python -m pip install -r src/predict_requirements.txt
+python -m src.train --config configs/claim_history/em_timeline_sibling_rich_pricing_ensemble.json --full-fit-only --model-path models/em_timeline_sibling_rich_pricing_ensemble.joblib
 ```
 
 Press Enter at the confirmation prompt. Training uses seed 42 and all
-70,000 rows from `data/trainingset.csv`. Use the saved model to score the
-test CSV. For a new competition CSV, replace the `--input` path.
+70,000 rows from `data/trainingset.csv`. Use the saved model to score
+`competitionset.csv` and write `predictedclaimamount.csv` (or replace
+`--input` with `data/testset.csv`):
 
 ```powershell
-python -m src.predict --model-path models/submission_1190003.joblib --input data/testset.csv --output submission_1190003.csv
+python -m src.predict --model-path models/em_timeline_sibling_rich_pricing_ensemble.joblib --input competitionset.csv --output predictedclaimamount.csv
 ```
 
 The input needs `rowIndex` and the same 18 feature columns as `data/testset.csv`.
-The output contains `rowIndex` and `ClaimAmount` in input row order.
+The output contains `rowIndex` and `ClaimAmount` in input row order. To score
+CSVs interactively offline without retraining, launch the predict-only local
+browser UI with `python -m src.predict_ui` (or `run_predictor.bat` on Windows).
 
-| Dashboard run | Matched holdout | Split seeds | Mean F1 | Mean MAE |
-| --- | ---: | --- | ---: | ---: |
-| **1190003** (selected) | 20% | 41–45 | **0.52348** | **92.52804** |
-| 1190004 | 25% | 41–45 | 0.51593 | 91.57719 |
+| Dashboard run | Holdout cohort | Split seeds | Mean F1 | Mean MAE |
+| --- | --- | --- | ---: | ---: |
+| **1200001** (selected) | 20% matched | 41–45 | **0.52346** | **91.92771** |
+| **1200002** (selected) | 25% matched | 41–45 | **0.51741** | **91.04931** |
+| *(5-fold OOF, all 70k rows)* | 5-fold CV | 42 | 0.50856 | **91.51996** |
+| *(fresh confirmation)* | 20% matched | 46–50 | 0.52274 | 95.50189 |
+| *(fresh confirmation)* | 25% matched | 46–50 | 0.50634 | 94.52112 |
+| *(transfer)* | 25% mixed | 41–45 | 0.41504 | 95.08075 |
+| *(transfer)* | 25% profile-disjoint | 41–45 | 0.15717 | 105.67332 |
+| 1190003 (previous) | 20% matched | 41–45 | 0.52348 | 92.52804 |
+| 1190004 (previous) | 25% matched | 41–45 | 0.51593 | 91.57719 |
 
 Reproduce the five-seed matched holdout scores.
 
 ```powershell
-python -m src.reproduce_timeline_models --config configs/claim_history/em_timeline_discount_quantile_ensemble.json --cohorts matched_20 matched_25
+python -m src.reproduce_timeline_models --config configs/claim_history/em_timeline_sibling_rich_pricing_ensemble.json --cohorts matched_20 matched_25
 ```
 
-See the [benchmark report](results/em_timeline_benchmark.md) for paired
+See the [benchmark report](results/em_timeline_benchmark.md) for earlier paired
 comparisons and transfer results.

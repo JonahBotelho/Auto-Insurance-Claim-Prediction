@@ -1,6 +1,6 @@
 /* Load the dashboard's static data assets from the local server. */
 async function fetchDashboardData(directory, name) {
-  const response = await fetch(new URL(name, directory));
+  const response = await fetch(new URL(name, directory), {cache: "no-cache"});
   if (!response.ok) throw new Error(`Could not load ${name} (HTTP ${response.status}).`);
   return response;
 }

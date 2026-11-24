@@ -228,7 +228,7 @@ class EMReconciledVeto:
         # indicates that the query includes a separate cohort of whole profiles.
         return estimate if estimate is not None and estimate - nominal >= .025 else nominal
 
-    def predict(self, query, *, use_seen_retention=False):
+    def predict(self, query, *, use_seen_retention=False, extra_counts=None):
         n_rows = len(query)
         warm = np.zeros(n_rows, dtype=bool)
         is_reconciled = np.zeros(n_rows, dtype=bool)
@@ -249,5 +249,6 @@ class EMReconciledVeto:
             warm[idx] = True
             state = canonical_state(self.zeros_[key], paid)
             is_reconciled[idx] = state[3] == "R"
-            p_em[idx], em_mass[idx] = em.predict_state(state, query_counts[key])
+            effective_query = query_counts[key] + (int(extra_counts[idx]) if extra_counts is not None else 0)
+            p_em[idx], em_mass[idx] = em.predict_state(state, effective_query)
         return warm, is_reconciled, p_em, em_mass

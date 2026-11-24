@@ -16,8 +16,10 @@ from src.exact_em_deconvolution import EMReconciledVeto
 from src.feature_schema import RANDOM_SEED
 from src.local_tail_refinement import cap_to_observed_payout_support
 from src.pairwise_payout_ensemble import PairwisePayoutEnsemble
+from src.payout_cap_pricing import supported_tails
 from src.profile_count_hurdle import ProfileCountHurdle
 from src.profile_count_survival import COUNT, ProfileCountSurvival
+from src.sibling_roster import sibling_extra_roster_rows
 from src.template_claim_ensemble import expected_f1_cutoff
 
 
@@ -60,20 +62,22 @@ class CountRetrievalTimelineClaimEnsemble(PairwiseTimelineClaimEnsemble):
             self.leaf_regular_ = ClaimHistoryLeafRetrieval().fit(features, amounts)
         return self
 
-    def _refine_warm_flags(self, features, anchor, prices, flags, cutoff):
+    def _refine_warm_flags(self, features, anchor, prices, flags, cutoff, *, return_scores=False):
         """Apply count-survival/hurdle agreement and dual leaf-retrieval admissions on warm profiles."""
         _, inverse, peers = np.unique(profile_keys(features), return_inverse=True, return_counts=True)
         point, continuation, warm = self.count_survival_.predict(features, anchor)
         if not warm.any():
-            return prices, flags
+            return (prices, flags, None) if return_scores else (prices, flags)
         _, hurdle, _ = self.count_hurdle_.predict(features, anchor)
         sizes = np.minimum(peers, MAX_ROWS)
         baseline, center = log_odds(point), log_odds(anchor)
-        decisions = []
+        adjusted_scores, decisions = [], []
         for law in (continuation, hurdle):
             rate = ((law @ COUNT) / sizes)[inverse]
             shift = np.clip(log_odds(rate) - baseline, -0.6, 0.6)
-            decisions.append(expit(center + shift / 2.0) >= cutoff)
+            adjusted = expit(center + shift / 2.0)
+            adjusted_scores.append(adjusted)
+            decisions.append(adjusted >= cutoff)
         first, second = decisions
         near = warm & (np.abs(anchor - cutoff) <= 0.075)
         counted = np.where(near & (first == second), second, flags)
@@ -88,6 +92,8 @@ class CountRetrievalTimelineClaimEnsemble(PairwiseTimelineClaimEnsemble):
             tail_caps = self.timeline_.tail_.predict(features)
             warm_quotes = np.where(admitted, np.maximum(0.8 * addition_quotes, np.minimum(addition_quotes, tail_caps)), addition_quotes)
             prices = np.where(added_warm, warm_quotes, prices)
+        if return_scores:
+            return prices, updated_flags, (adjusted_scores[0], adjusted_scores[1], ranked[:, 0], regular[:, 0])
         return prices, updated_flags
 
     def _score_batch(self, features):
@@ -108,7 +114,7 @@ class EMTimelineClaimEnsemble(CountRetrievalTimelineClaimEnsemble):
                  em_support_min=0.003, clean_weight=0.50, default_alpha=0.80, masked_quote_pricing=False,
                  structural_source_features=False, cap_to_payout_support=False, retention_adjusted_ranking=False,
                  history_crossfit_repeats=1, seen_profile_retention=False, competing_discounts=False,
-                 conditional_cold_pricing=False):
+                 conditional_cold_pricing=False, sibling_effective_em=False, rich_ensemble_pricing=False):
         super().__init__(baseline_model, claim_probability_threshold=claim_probability_threshold,
                          n_splits=n_splits, random_seed=random_seed)
         self.calibrated_l1_pricing = calibrated_l1_pricing
@@ -125,13 +131,21 @@ class EMTimelineClaimEnsemble(CountRetrievalTimelineClaimEnsemble):
         self.seen_profile_retention = seen_profile_retention
         self.competing_discounts = competing_discounts
         self.conditional_cold_pricing = conditional_cold_pricing
+        self.sibling_effective_em = sibling_effective_em
+        self.rich_ensemble_pricing = rich_ensemble_pricing
+
+    def _effective_low_confidence_floor(self):
+        # For L1 loss on flagged rows with P(claim) < 0.5, the optimal positive quote approaches 0+.
+        if getattr(self, "rich_ensemble_pricing", False) and self.low_confidence_floor == 1.0:
+            return 0.01
+        return self.low_confidence_floor
 
     def fit(self, features, amounts):
         with threadpool_limits(limits=2):
             PairwisePayoutEnsemble.fit(self, features, amounts)
             self.timeline_ = BonusMalusTimelineV3Detector(
                 random_seed=self.random_seed, alpha=self.default_alpha,
-                low_confidence_floor=self.low_confidence_floor,
+                low_confidence_floor=self._effective_low_confidence_floor(),
                 competing_discounts=getattr(self, "competing_discounts", False),
                 conditional_cold_pricing=getattr(self, "conditional_cold_pricing", False),
             ).fit(features, amounts)
@@ -147,13 +161,42 @@ class EMTimelineClaimEnsemble(CountRetrievalTimelineClaimEnsemble):
             )
         return self
 
+    def _apply_rich_warm_pricing(self, features, base_prices, flags, warm, anchor, prior, fallback, share,
+                                 warm_scores, p_clean, p_l1, floor):
+        """Re-quote warm rows using the calibrated multi-expert warm claim probability."""
+        surv_adj, hurd_adj, leaf_ranked, leaf_regular = warm_scores
+        leaf_rk = np.where(np.isfinite(leaf_ranked), leaf_ranked, anchor)
+        leaf_rg = np.where(np.isfinite(leaf_regular), leaf_regular, anchor)
+        p_rich = 0.25 * surv_adj + 0.25 * hurd_adj + 0.15 * leaf_rk + 0.15 * leaf_rg + 0.20 * p_clean
+        p_mix = 0.50 * prior + 0.50 * p_rich
+        _, _, rich_prices, _ = self.relative_pricer_.predict(features, p_mix, fallback, scaled_share=share)
+        rich_prices = self.tail_.predict(features, rich_prices)
+        rich_prices = supported_tails(
+            self.relative_pricer_, features, rich_prices, p_mix, fallback, share,
+        )["single_copy_tail"]
+        rich_prices = np.where(warm & (p_l1 < self.low_confidence_cutoff), floor, rich_prices)
+        if getattr(self, "cap_to_payout_support", False):
+            rich_prices = cap_to_observed_payout_support(features, rich_prices, flags, self.em_veto_.paid_, floor)
+        # Preserve higher base quotes where prior already cleared 0.5 while lifting under-priced warm rows.
+        base_floored = np.where(base_prices <= 1.0001, floor, base_prices)
+        return np.where(warm, np.maximum(base_floored, rich_prices), base_floored)
+
     def _score_batch(self, features):
-        anchor, prices, flags, base_cutoff, pricing_risk = self._ranked_batch(features)
+        rich_pricing = getattr(self, "rich_ensemble_pricing", False)
+        floor = self._effective_low_confidence_floor()
+        anchor, prices, flags, base_cutoff, pricing_risk, prior, fallback, share = self._ranked_batch_with_context(features)
         if not len(features):
             return anchor, prices, flags, base_cutoff
-        prices, flags = self._refine_warm_flags(features, anchor, prices, flags, base_cutoff)
+        prices, flags, warm_scores = self._refine_warm_flags(
+            features, anchor, prices, flags, base_cutoff, return_scores=True,
+        )
+        extra_counts = (
+            sibling_extra_roster_rows(self.timeline_.reference_profiles_, features)
+            if getattr(self, "sibling_effective_em", False) else None
+        )
         warm, is_reconciled, p_em, em_mass = self.em_veto_.predict(
             features, use_seen_retention=getattr(self, "seen_profile_retention", False),
+            extra_counts=extra_counts,
         )
         cand_cold, cold_risk = self.timeline_.predict_cold_risk(features)
 
@@ -171,13 +214,18 @@ class EMTimelineClaimEnsemble(CountRetrievalTimelineClaimEnsemble):
             prices = np.where(added_cold, cold_quotes, prices)
         flags = flags | added_cold
 
+        p_clean, p_l1 = None, None
         if self.calibrated_l1_pricing and self.warm_calibrator_ is not None:
-            p_clean, prices = self.warm_calibrator_.predict_with_quotes(features, prices, self.low_confidence_floor)
+            p_clean, prices = self.warm_calibrator_.predict_with_quotes(features, prices, floor)
             cold_prob = np.where(cand_cold, np.maximum(anchor, cold_risk), anchor)
             p_l1 = np.where(warm, (1.0 - self.clean_weight) * pricing_risk + self.clean_weight * p_clean, cold_prob)
-            prices = np.where(p_l1 < self.low_confidence_cutoff, self.low_confidence_floor, prices)
+            prices = np.where(p_l1 < self.low_confidence_cutoff, floor, prices)
         if getattr(self, "cap_to_payout_support", False):
-            prices = cap_to_observed_payout_support(features, prices, flags, self.em_veto_.paid_, self.low_confidence_floor)
+            prices = cap_to_observed_payout_support(features, prices, flags, self.em_veto_.paid_, floor)
+        if rich_pricing and warm.any() and warm_scores is not None and p_clean is not None:
+            prices = self._apply_rich_warm_pricing(
+                features, prices, flags, warm, anchor, prior, fallback, share, warm_scores, p_clean, p_l1, floor,
+            )
 
         risk = np.where(cand_cold, np.maximum(anchor, cold_risk), anchor)
         return _align_risk_with_flags(risk, flags, cutoff), prices, flags, cutoff
