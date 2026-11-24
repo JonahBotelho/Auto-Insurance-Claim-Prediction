@@ -2,7 +2,7 @@ analysis/output
 __pycache__
 .idea
 .venv
-models
+models/*
 
 # Generated submission metadata and temporary build artifacts.
 /data/checkpoint2_upload_comments.txt
@@ -12,4 +12,7 @@ claimproj/data/
 claimproj/catboost_info/
 claimproj/results/*.npy
 *.joblib
+!models/em_timeline_sibling_rich_pricing_ensemble.joblib
 !claimproj/results/cv_summary.csv
+analysis/
+/catboost_info/
