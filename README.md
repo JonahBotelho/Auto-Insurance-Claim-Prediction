@@ -1,4 +1,4 @@
-# COMP4983-Final-Project
+# Auto Insurance Claim Prediction
 
 Predict insurance claim amounts (`ClaimAmount`) from 18 anonymized customer and
 vehicle features. `rowIndex` identifies rows and is excluded from model inputs.
